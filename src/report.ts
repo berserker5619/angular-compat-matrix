@@ -38,17 +38,27 @@ export function findings(
       const [name, check] = failure;
       // Partial's message names the declaration; a build's message is just "failed", so its hint says more.
       const why = name === 'partial' && check.hint ? `${check.message} ${check.hint}` : (check.hint ?? check.message);
-      if (version.claimed === true) {
-        raw.push({ level: 'error', majors: [m], key: `fail:${name}:${why}`, text: `${CHECK_LABELS[name]}: ${why}` });
-      } else if (version.claimed === false) {
+      if (name === 'strict' && check.hint === 'library typings have errors with skipLibCheck: false') {
+        const level = version.claimed === true ? 'error' : version.claimed === false ? 'note' : 'warning';
         raw.push({
-          level: 'note',
+          level,
           majors: [m],
-          key: `outside:${name}`,
-          text: `${CHECK_LABELS[name]} fails, but the peer range doesn't claim this version, so that's expected.`,
+          key: 'skipLibCheck:dts-errors',
+          text: 'library typings have errors with skipLibCheck: false',
         });
       } else {
-        raw.push({ level: 'warning', majors: [m], key: `fail:${name}:${why}`, text: `${CHECK_LABELS[name]}: ${why}` });
+        if (version.claimed === true) {
+          raw.push({ level: 'error', majors: [m], key: `fail:${name}:${why}`, text: `${CHECK_LABELS[name]}: ${why}` });
+        } else if (version.claimed === false) {
+          raw.push({
+            level: 'note',
+            majors: [m],
+            key: `outside:${name}`,
+            text: `${CHECK_LABELS[name]} fails, but the peer range doesn't claim this version, so that's expected.`,
+          });
+        } else {
+          raw.push({ level: 'warning', majors: [m], key: `fail:${name}:${why}`, text: `${CHECK_LABELS[name]}: ${why}` });
+        }
       }
       if (version.skippedInstallScripts?.length) {
         const list = version.skippedInstallScripts.join(', ');
@@ -67,6 +77,16 @@ export function findings(
         key: `unclaimed:${ranges}`,
         text: `works, but peerDependencies doesn't allow it (${ranges}). Widen the range to include it.`,
       });
+    }
+    if (version.omittedEntryPoints?.length) {
+      for (const item of version.omittedEntryPoints) {
+        raw.push({
+          level: 'warning',
+          majors: [m],
+          key: `undeclared:${item.entry}:${item.missingPackage}`,
+          text: `entry point ${item.entry} imports ${item.missingPackage}, which isn't declared in dependencies or peers`,
+        });
+      }
     }
   }
 

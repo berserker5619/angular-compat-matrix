@@ -158,6 +158,33 @@ describe('the smoke component', () => {
     assert.match(smoke.component, /<div libToggle><\/div>/);
   });
 
+  it('binds an input that strictly requires boolean rather than writing it bare', () => {
+    const custom = renderSmoke(
+      {
+        entries: ['lib'],
+        declarables: [
+          {
+            id: 'd99',
+            kind: 'directive',
+            className: 'CollapseDirective',
+            exportName: 'CollapseDirective',
+            entry: 'lib',
+            selector: '[collapse]',
+            standalone: true,
+            inputs: [{ property: 'collapse', alias: 'collapse', required: false, accessible: true, bare: false }],
+            typeParams: 0,
+          },
+        ],
+        pipes: [],
+        modules: [],
+        services: [],
+      },
+      { signalWriteBrand: true },
+    );
+    assert.match(custom.component, /<div \[collapse\]="v\d+"><\/div>/);
+    assert.doesNotMatch(custom.component, /<div collapse><\/div>/);
+  });
+
   it('uses components an NgModule exports, typed as any when they are not public', () => {
     assert.match(smoke.component, /<lib-badge \[label\]="v0"><\/lib-badge>/);
     assert.match(smoke.component, /v0 = undefined as unknown as any;/);

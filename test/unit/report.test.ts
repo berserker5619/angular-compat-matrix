@@ -94,6 +94,36 @@ describe('findings', () => {
     assert.deepEqual(notes[0].majors, [21]);
     assert.match(notes[0].text, /core-js@3\.46\.0/);
   });
+
+  it('reports skipLibCheck failures as a separate finding without strict-templates label', () => {
+    const list = findings(
+      [
+        version(22, true, {
+          strict: result('fail', 'library typings have errors with skipLibCheck: false', {
+            hint: 'library typings have errors with skipLibCheck: false',
+          }),
+        }),
+      ],
+      { peerDependencies: { '@angular/core': '^22.0.0' } },
+    );
+    assert.equal(list.length, 1);
+    assert.equal(list[0].level, 'error');
+    assert.deepEqual(list[0].majors, [22]);
+    assert.equal(list[0].text, 'library typings have errors with skipLibCheck: false');
+  });
+
+  it('reports undeclared entry point dependencies as warnings', () => {
+    const v21 = version(21, true, {});
+    v21.omittedEntryPoints = [{ entry: 'primeng/chart', missingPackage: 'chart.js' }];
+    const v22 = version(22, true, {});
+    v22.omittedEntryPoints = [{ entry: 'primeng/chart', missingPackage: 'chart.js' }];
+    const list = findings([v21, v22], { peerDependencies: { '@angular/core': '^21.0.0 || ^22.0.0' } });
+    const warn = list.find((f) => f.text.includes('primeng/chart'));
+    assert.ok(warn);
+    assert.equal(warn.level, 'warning');
+    assert.deepEqual(warn.majors, [21, 22]);
+    assert.equal(warn.text, "entry point primeng/chart imports chart.js, which isn't declared in dependencies or peers");
+  });
 });
 
 describe('rendering', () => {

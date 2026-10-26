@@ -42,6 +42,8 @@ export interface VersionReport {
   setupError?: string;
   /** Packages in the app whose install scripts didn't run (the default; --allow-scripts runs them). */
   skippedInstallScripts?: string[];
+  /** Entry points left out of the build because they import packages not declared in dependencies or peers. */
+  omittedEntryPoints?: Array<{ entry: string; missingPackage: string }>;
   durationMs: number;
   appDir?: string;
 }

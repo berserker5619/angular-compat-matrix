@@ -3,14 +3,14 @@ import { createRequire } from 'node:module';
 import { freemem, availableParallelism } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { configureBuild, generateApp, type PackageManager, readJson, writeJson } from './app.ts';
-import { ngBuild } from './build.ts';
+import { findUndeclaredImports, isDtsOnlyFailure, ngBuild } from './build.ts';
 import { installLibrary } from './install.ts';
 import type { PackedLibrary } from './library.ts';
 import { type CheckName, CHECKS, type CheckResult, result, type VersionReport } from './model.ts';
 import { judgePartial, type PartialSummary } from './partial.ts';
 import { planPeers } from './peers.ts';
 import type { Registry } from './registry.ts';
-import { entryPoints, hasSignalWriteBrand, readPublicApi, renderSmoke, writeSmoke } from './smoke.ts';
+import { entryPoints, hasSignalWriteBrand, type PublicApi, readPublicApi, renderSmoke, writeSmoke } from './smoke.ts';
 import { runLibraryTests, swapVersions } from './tests.ts';
 import type { AngularMajor } from './versions.ts';
 
@@ -148,9 +148,10 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
     if (!partial.pass) return finish();
 
     let files: string[] | undefined;
+    let api: PublicApi | undefined;
     if (!ctx.consumer) {
       try {
-        const api = readPublicApi(appDir, entryPoints(ctx.library.manifest as Parameters<typeof entryPoints>[0]));
+        api = readPublicApi(appDir, entryPoints(ctx.library.manifest as Parameters<typeof entryPoints>[0]));
         writeSmoke(appDir, renderSmoke(api, { signalWriteBrand: hasSignalWriteBrand(appDir) }));
         files = ['src/ngm-main.ts'];
       } catch (error) {
@@ -163,8 +164,29 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
     const project = configureBuild(appDir, files?.[0]);
 
     ctx.log(`${tag}: AOT build`);
-    const aot = await ngBuild(appDir, project.tsConfig, { strictTemplates: false, skipLibCheck: true }, files);
+    let aot = await ngBuild(appDir, project.tsConfig, { strictTemplates: false, skipLibCheck: true }, files);
     if (aot.environment) return notChecked('The AOT build', aot.environment, aot.errorLines);
+
+    const omittedList: Array<{ entry: string; missingPackage: string }> = [];
+    while (!aot.pass && !ctx.consumer && api) {
+      const undeclared = findUndeclaredImports(aot.errorLines, ctx.library.manifest as any, api.entries);
+      if (!undeclared.length) break;
+      omittedList.push(...undeclared);
+      const omittedSet = new Set(undeclared.map((u) => u.entry));
+      api.entries = api.entries.filter((e) => !omittedSet.has(e));
+      api.declarables = api.declarables.filter((d) => !d.entry || !omittedSet.has(d.entry));
+      api.pipes = api.pipes.filter((p) => !p.entry || !omittedSet.has(p.entry));
+      api.modules = api.modules.filter((m) => !omittedSet.has(m.entry));
+      api.services = api.services.filter((s) => !omittedSet.has(s.entry));
+      writeSmoke(appDir, renderSmoke(api, { signalWriteBrand: hasSignalWriteBrand(appDir) }));
+      ctx.log(`${tag}: re-running AOT build without omitted entry points: ${[...omittedSet].join(', ')}`);
+      aot = await ngBuild(appDir, project.tsConfig, { strictTemplates: false, skipLibCheck: true }, files);
+      if (aot.environment) return notChecked('The AOT build', aot.environment, aot.errorLines);
+    }
+    if (omittedList.length) {
+      report.omittedEntryPoints = omittedList;
+    }
+
     checks.aot = result(aot.pass ? 'pass' : 'fail', aot.pass ? 'Production build succeeded.' : 'Production build failed.', {
       errorLines: aot.errorLines,
       hint: aot.hint,
@@ -175,10 +197,19 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
     ctx.log(`${tag}: strict build`);
     const strict = await ngBuild(appDir, project.tsConfig, { strictTemplates: true, skipLibCheck: false }, files);
     if (strict.environment) return notChecked('The strict build', strict.environment, strict.errorLines);
+    const dtsOnly = !strict.pass && isDtsOnlyFailure(strict.errorLines);
     checks.strict = result(
       strict.pass ? 'pass' : 'fail',
-      strict.pass ? 'Builds with strictTemplates: true and skipLibCheck: false.' : 'Fails with strictTemplates: true and skipLibCheck: false.',
-      { errorLines: strict.errorLines, hint: strict.hint, durationMs: strict.durationMs },
+      strict.pass
+        ? 'Builds with strictTemplates: true and skipLibCheck: false.'
+        : dtsOnly
+          ? 'library typings have errors with skipLibCheck: false'
+          : 'Fails with strictTemplates: true and skipLibCheck: false.',
+      {
+        errorLines: strict.errorLines,
+        hint: dtsOnly ? 'library typings have errors with skipLibCheck: false' : strict.hint,
+        durationMs: strict.durationMs,
+      },
     );
     if (!strict.pass) return finish();
 

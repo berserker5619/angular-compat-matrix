@@ -120,9 +120,8 @@ cases.push(
     name: 'strict-attr',
     cwd: join(libs, 'strict-attr'),
     args: ['--versions', '22'],
-    exit: 1,
-    versions: { 22: claimed({ ...PASS, strict: 'fail' }) },
-    says: /booleanAttribute/,
+    exit: 0,
+    versions: { 22: claimed(PASS) },
   },
   // Install scripts: by default the package's postinstall must not run; with --allow-scripts it must.
   ...(['npm', 'pnpm'] as const).flatMap((pm): Case[] => [

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { hintFor } from '../../src/build.ts';
+import { findUndeclaredImports, hintFor, isDtsOnlyFailure } from '../../src/build.ts';
 import { errorLines } from '../../src/exec.ts';
 
 describe('build hints', () => {
@@ -39,12 +39,86 @@ describe('build hints', () => {
   }
 
   it('points at booleanAttribute for strict template errors', () => {
-    const output = `X [ERROR] TS2322: Type 'string' is not assignable to type 'boolean'. [plugin angular-compiler]`;
+    const output = `X [ERROR] TS2322: Type 'string' is not assignable to type 'boolean'. [plugin angular-compiler]
+    src/ngm-smoke.ts:10:5:`;
     assert.match(hintFor(output)!, /booleanAttribute/);
+  });
+
+  it('recognizes dts-only errors with skipLibCheck: false', () => {
+    const output = `X [ERROR] TS2307: Cannot find module 'node_modules/rxjs/dist/types' or its corresponding type declarations. [plugin angular-compiler]
+    node_modules/@coreui/angular/types/coreui-angular.d.ts:2148:26:`;
+    assert.equal(hintFor(output), 'library typings have errors with skipLibCheck: false');
   });
 
   it('has no hint for an unknown failure', () => {
     assert.equal(hintFor('Something else went wrong'), undefined);
+  });
+});
+
+describe('dts-only classification', () => {
+  it('returns true when all errors are in .d.ts files', () => {
+    const lines = [
+      "X [ERROR] TS2307: Cannot find module 'rxjs/types'",
+      '    node_modules/@coreui/angular/types/coreui-angular.d.ts:2148:26:',
+    ];
+    assert.equal(isDtsOnlyFailure(lines), true);
+  });
+
+  it('returns false when errors are in application templates or components', () => {
+    const lines = [
+      "X [ERROR] TS2322: Type 'string' is not assignable to type 'boolean'",
+      '    src/ngm-smoke.ts:118:9:',
+    ];
+    assert.equal(isDtsOnlyFailure(lines), false);
+  });
+});
+
+describe('undeclared imports in entry points', () => {
+  it('detects undeclared imports like chart.js and maps them to entry points', () => {
+    const manifest = {
+      name: 'primeng',
+      exports: {
+        '.': { default: './fesm2022/primeng.mjs' },
+        './chart': { default: './fesm2022/primeng-chart.mjs' },
+      },
+      dependencies: { tslib: '^2.0.0' },
+      peerDependencies: { '@angular/core': '^22.0.0' },
+    };
+    const lines = [
+      'X [ERROR] Could not resolve "chart.js/auto"',
+      '    node_modules/primeng/fesm2022/primeng-chart.mjs:4:18:',
+      '      4 │ import Chart from "chart.js/auto";',
+    ];
+    const result = findUndeclaredImports(lines, manifest, ['primeng', 'primeng/chart']);
+    assert.deepEqual(result, [{ entry: 'primeng/chart', missingPackage: 'chart.js' }]);
+  });
+
+  it('detects lodash in a single-entry-point library', () => {
+    const manifest = {
+      name: 'ngx-guided-tour',
+      dependencies: { tslib: '^2.0.0' },
+      peerDependencies: { '@angular/core': '>=13.0.0' },
+    };
+    const lines = [
+      'X [ERROR] Could not resolve "lodash"',
+      '    node_modules/ngx-guided-tour/fesm2020/ngx-guided-tour.mjs:5:26:',
+    ];
+    const result = findUndeclaredImports(lines, manifest, ['ngx-guided-tour']);
+    assert.deepEqual(result, [{ entry: 'ngx-guided-tour', missingPackage: 'lodash' }]);
+  });
+
+  it('ignores packages declared in dependencies or peers', () => {
+    const manifest = {
+      name: 'my-lib',
+      dependencies: { lodash: '^4.0.0' },
+      peerDependencies: {},
+    };
+    const lines = [
+      'X [ERROR] Could not resolve "lodash"',
+      '    node_modules/my-lib/fesm2022/my-lib.mjs:5:26:',
+    ];
+    const result = findUndeclaredImports(lines, manifest, ['my-lib']);
+    assert.deepEqual(result, []);
   });
 });
 
