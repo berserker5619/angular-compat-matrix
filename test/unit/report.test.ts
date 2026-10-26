@@ -122,6 +122,7 @@ describe('findings', () => {
 
 describe('rendering', () => {
   const report: Report = {
+    schemaVersion: 1,
     tool: { name: 'angular-compat-matrix', version: '0.1.0' },
     checkedAt: '2026-10-26T10:00:00.000Z',
     library: { name: 'my-dropdown', version: '3.0.0', source: 'test', compiledWith: '21.2.0', highestMinVersion: '20.0.0', declarations: 4 },

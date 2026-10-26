@@ -24,6 +24,7 @@ export interface InstallOutcome {
   pass: boolean;
   message: string;
   errorLines: string[];
+  fullOutput?: string;
   /** Peer conflicts that were expected (the version is outside the claimed range) and ignored. */
   ignored: string[];
   /** The machine's fault (a timeout, a full disk, the network), not the package's. */
@@ -62,6 +63,7 @@ async function installWithNpm(request: InstallRequest, deps: Record<string, stri
       pass: false,
       message: 'npm install failed.',
       errorLines: errorLines(result.output),
+      fullOutput: result.output,
       ignored: [],
       environment: environmentProblem(result),
       skippedScripts,
@@ -154,6 +156,7 @@ async function installWithPnpm(request: InstallRequest, deps: Record<string, str
       pass: false,
       message: peer ? 'Peer conflict (pnpm strict-peer-dependencies).' : 'pnpm install failed.',
       errorLines: errorLines(result.output),
+      fullOutput: result.output,
       ignored,
       environment: environmentProblem(result),
       skippedScripts,

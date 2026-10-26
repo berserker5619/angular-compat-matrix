@@ -6,6 +6,7 @@ import { environmentProblem, errorLines, exec, quietEnv, stepTimeout } from './e
 export interface BuildOutcome {
   pass: boolean;
   errorLines: string[];
+  fullOutput?: string;
   hint?: string;
   durationMs: number;
   /** The machine's fault (a timeout, a full disk), not the package's. */
@@ -23,10 +24,12 @@ export async function ngBuild(appDir: string, baseTsConfig: string, mode: BuildM
     timeoutMs: stepTimeout(),
   });
   if (result.code === 0) return { pass: true, errorLines: [], durationMs: result.durationMs };
+  const lines = errorLines(result.output);
   return {
     pass: false,
-    errorLines: errorLines(result.output),
-    hint: hintFor(result.output),
+    errorLines: lines,
+    fullOutput: result.output,
+    hint: hintFor(result.output) ?? lines[0],
     durationMs: result.durationMs,
     environment: environmentProblem(result),
   };

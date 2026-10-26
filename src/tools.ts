@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { environmentProblem, errorLines, npm } from './exec.ts';
@@ -10,6 +10,55 @@ export function defaultCacheDir(): string {
   if (process.env.NG_MATRIX_CACHE) return process.env.NG_MATRIX_CACHE;
   if (process.platform === 'win32' && process.env.LOCALAPPDATA) return join(process.env.LOCALAPPDATA, 'ng-matrix', 'Cache');
   return join(process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'), 'ng-matrix');
+}
+
+export function cacheStats(cacheDir: string): { bytes: number; count: number } {
+  let bytes = 0;
+  let count = 0;
+  if (!existsSync(cacheDir)) return { bytes: 0, count: 0 };
+  const stack = [cacheDir];
+  while (stack.length) {
+    const current = stack.pop()!;
+    let entries;
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+      } else if (entry.isFile()) {
+        try {
+          bytes += statSync(full).size;
+          count++;
+        } catch {
+          // ignore transient access errors
+        }
+      }
+    }
+  }
+  return { bytes, count };
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let val = bytes / 1024;
+  for (const unit of units) {
+    if (val < 1024 || unit === 'TB') {
+      return `${val >= 10 ? val.toFixed(1) : val.toFixed(2)} ${unit}`;
+    }
+    val /= 1024;
+  }
+  return `${bytes} B`;
+}
+
+export function cleanCache(cacheDir: string): void {
+  if (existsSync(cacheDir)) {
+    rmSync(cacheDir, { recursive: true, force: true, maxRetries: 5 });
+  }
 }
 
 const pending = new Map<string, Promise<string>>();

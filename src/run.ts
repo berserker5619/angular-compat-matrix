@@ -13,6 +13,7 @@ import type { Registry } from './registry.ts';
 import { entryPoints, hasSignalWriteBrand, type PublicApi, readPublicApi, renderSmoke, writeSmoke } from './smoke.ts';
 import { runLibraryTests, swapVersions } from './tests.ts';
 import type { AngularMajor } from './versions.ts';
+import type { Progress } from './progress.ts';
 
 export interface RunContext {
   library: PackedLibrary;
@@ -31,6 +32,7 @@ export interface RunContext {
   /** Let every install script run, not just the Angular toolchain's (--allow-scripts). */
   allowScripts: boolean;
   log: (line: string) => void;
+  progress?: Progress;
 }
 
 /** About what one Angular production build needs; versions beyond what memory allows wait their turn. */
@@ -80,6 +82,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
   };
   const finish = () => {
     report.durationMs = Date.now() - started;
+    ctx.progress?.done(angular.major);
     ctx.log(`${tag}: done in ${Math.round(report.durationMs / 1000)} s`);
     return report;
   };
@@ -105,6 +108,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
   mkdirSync(versionDir, { recursive: true });
   let appDir: string;
   try {
+    ctx.progress?.step(angular.major, ctx.consumer ? 'creating consumer app' : `ng new (CLI ${angular.cliVersion})`);
     ctx.log(`${tag}: creating the app (${ctx.consumer ? 'your --consumer app' : `ng new, CLI ${angular.cliVersion}`})`);
     appDir = ctx.consumer
       ? await copyConsumer(ctx, angular, plan.installs, versionDir)
@@ -117,6 +121,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
   }
 
   try {
+    ctx.progress?.step(angular.major, `installing with ${ctx.pm}`);
     ctx.log(`${tag}: installing ${ctx.library.manifest.name} with ${ctx.pm}`);
     const installStarted = Date.now();
     const installed = await installLibrary({
@@ -134,6 +139,8 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
     if (installed.environment) return notChecked('The install', installed.environment, installed.errorLines);
     checks.install = result(installed.pass ? 'pass' : 'fail', installed.message, {
       errorLines: installed.errorLines,
+      fullOutput: installed.fullOutput,
+      hint: installed.pass ? undefined : installed.errorLines[0],
       durationMs: Date.now() - installStarted,
     });
     if (!installed.pass) return finish();
@@ -163,6 +170,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
     }
     const project = configureBuild(appDir, files?.[0]);
 
+    ctx.progress?.step(angular.major, 'AOT build');
     ctx.log(`${tag}: AOT build`);
     let aot = await ngBuild(appDir, project.tsConfig, { strictTemplates: false, skipLibCheck: true }, files);
     if (aot.environment) return notChecked('The AOT build', aot.environment, aot.errorLines);
@@ -183,6 +191,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
         const reason = `${item.entry} imports ${item.missingPackage}, which isn't declared in dependencies or peers. Every user of ${item.entry} needs ${item.missingPackage} installed.`;
         checks.aot = result('fail', reason, {
           errorLines: aot.errorLines,
+          fullOutput: aot.fullOutput,
           hint: reason,
           durationMs: aot.durationMs,
         });
@@ -206,11 +215,13 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
 
     checks.aot = result(aot.pass ? 'pass' : 'fail', aot.pass ? 'Production build succeeded.' : 'Production build failed.', {
       errorLines: aot.errorLines,
-      hint: aot.hint,
+      fullOutput: aot.fullOutput,
+      hint: aot.hint ?? aot.errorLines[0],
       durationMs: aot.durationMs,
     });
     if (!aot.pass) return finish();
 
+    ctx.progress?.step(angular.major, 'strict build');
     ctx.log(`${tag}: strict build`);
     const strict = await ngBuild(appDir, project.tsConfig, { strictTemplates: true, skipLibCheck: false }, files);
     if (strict.environment) return notChecked('The strict build', strict.environment, strict.errorLines);
@@ -225,10 +236,11 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
         ? 'Builds with strictTemplates: true and skipLibCheck: false.'
         : dtsOnly
           ? 'Builds with strictTemplates: true; library typings have errors with skipLibCheck: false.'
-          : (dtsHint ?? 'Fails with strictTemplates: true and skipLibCheck: false.'),
+          : (dtsHint ?? strict.errorLines[0] ?? 'Fails with strictTemplates: true and skipLibCheck: false.'),
       {
         errorLines: strict.errorLines,
-        hint: dtsHint,
+        fullOutput: strict.fullOutput,
+        hint: dtsHint ?? strict.errorLines[0],
         durationMs: strict.durationMs,
       },
     );
@@ -238,6 +250,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
       if (!ctx.workspace) {
         checks.tests = result('off', 'No workspace to test: the package came from --tarball or --package.');
       } else {
+        ctx.progress?.step(angular.major, 'library tests');
         ctx.log(`${tag}: library tests`);
         const tests = await runLibraryTests({
           workspace: ctx.workspace,
@@ -254,6 +267,8 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
         if (tests.environment) return notChecked('The library tests', tests.environment, tests.errorLines);
         checks.tests = result(tests.pass ? 'pass' : 'fail', tests.message, {
           errorLines: tests.errorLines,
+          fullOutput: tests.fullOutput,
+          hint: tests.pass ? undefined : tests.errorLines[0],
           durationMs: tests.durationMs,
         });
       }

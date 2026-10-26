@@ -37,7 +37,7 @@ export function findings(
     if (failure) {
       const [name, check] = failure;
       // Partial's message names the declaration; a build's message is just "failed", so its hint says more.
-      const why = name === 'partial' && check.hint ? `${check.message} ${check.hint}` : (check.hint ?? check.message);
+      const why = name === 'partial' && check.hint ? `${check.message} ${check.hint}` : (check.hint ?? check.errorLines?.[0] ?? check.message);
       if (version.claimed === true) {
         raw.push({ level: 'error', majors: [m], key: `fail:${name}:${why}`, text: `${CHECK_LABELS[name]}: ${why}` });
       } else if (version.claimed === false) {
@@ -195,9 +195,14 @@ export function renderTerminal(report: Report, verbose = false): string {
   for (const version of failing) {
     const failure = firstFailure(version);
     const errors = version.setupError ? version.setupError.split('\n').slice(1) : (failure?.[1].errorLines ?? []);
-    if (!errors.length) continue;
+    const full = failure?.[1].fullOutput;
+    if (!errors.length && !full) continue;
     lines.push('', `${rowLabel(version)}, ${failure ? CHECK_LABELS[failure[0]] : 'setup'}:`);
-    for (const line of errors.slice(0, verbose ? errors.length : 6)) lines.push(`  ${line.trim()}`);
+    if (verbose && full) {
+      for (const line of full.split(/\r?\n/)) lines.push(`  ${line}`);
+    } else {
+      for (const line of errors.slice(0, 6)) lines.push(`  ${line.trim()}`);
+    }
   }
   lines.push('', exitSummary(report));
   return lines.join('\n') + '\n';

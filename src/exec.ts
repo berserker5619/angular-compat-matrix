@@ -48,8 +48,22 @@ export function killAllChildren(): void {
   running.clear();
 }
 
+let verboseEnabled = false;
+
+export function setVerbose(enabled: boolean): void {
+  verboseEnabled = enabled;
+}
+
+export function isVerbose(): boolean {
+  return verboseEnabled;
+}
+
 export function exec(command: string, args: string[], options: ExecOptions): Promise<ExecResult> {
   const started = Date.now();
+  if (verboseEnabled) {
+    const fullCmd = options.shell ? [command, ...args].join(' ') : `${command} ${args.join(' ')}`;
+    process.stderr.write(`[ng-matrix] > ${fullCmd}\n`);
+  }
   return new Promise((resolve) => {
     // On Linux and macOS each child leads its own process group, so killing the group stops
     // its children too. Windows has taskkill /T for that.

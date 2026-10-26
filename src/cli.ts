@@ -7,14 +7,15 @@ import { parseArgs } from 'node:util';
 import semver from 'semver';
 import type { PackageManager } from './app.ts';
 import { LibraryError, prepareLibrary } from './library.ts';
-import type { Report } from './model.ts';
+import { SCHEMA_VERSION, type Report } from './model.ts';
 import { angularImports, scanPackage, summarize } from './partial.ts';
 import { Registry, RegistryError } from './registry.ts';
 import { exitCode, findings, renderJson, renderMarkdown, renderTerminal } from './report.ts';
 import { defaultConcurrency, runAll } from './run.ts';
-import { setStepTimeout } from './exec.ts';
+import { setStepTimeout, setVerbose } from './exec.ts';
+import { Progress } from './progress.ts';
 import { ALLOW_SCRIPTS_WARNING } from './scripts.ts';
-import { defaultCacheDir } from './tools.ts';
+import { cacheStats, cleanCache, defaultCacheDir, formatBytes } from './tools.ts';
 import {
   type AngularMajor,
   defaultMajors,
@@ -34,6 +35,8 @@ major (made with that major's own CLI), builds it, and reports a matrix.
 Usage
   npx angular-compat-matrix [options]
   ng-matrix [options]                  (once installed)
+  ng-matrix cache                      (show cache location and size)
+  ng-matrix cache clean                (delete the cache)
 
 Options
   --versions <list>      Angular majors to check: 22, 18-22, 20,22. Default: the supported
@@ -44,6 +47,7 @@ Options
   --tests                Also run the library's tests on each version (slow)
   --test-command <cmd>   The test command for --tests (default: <pm> test)
   --format <format>      terminal (default), markdown or json
+  --json                 Shorthand for --format json
   --pm <npm|pnpm>        Package manager for the apps (default: pnpm if there's a
                          pnpm-lock.yaml, else npm)
   --build <cmd>          Build the library with this command instead of the detected one
@@ -57,7 +61,7 @@ Options
                          default only the Angular toolchain's own builds run (esbuild, lmdb...)
   --offline              Use only cached registry answers and packages
   --cwd <dir>            The library's workspace (default: the current folder)
-  --verbose              Show every error line, not just the first few
+  --verbose              Show commands run and full build/install output for failures
   -h, --help             This help
   -v, --version          ng-matrix's version
 
@@ -109,6 +113,7 @@ export async function main(argv: string[]): Promise<number> {
       'test-command': { type: 'string' },
       'allow-scripts': { type: 'boolean', default: false },
       format: { type: 'string', default: 'terminal' },
+      json: { type: 'boolean', default: false },
       pm: { type: 'string' },
       build: { type: 'string' },
       'skip-build': { type: 'boolean', default: false },
@@ -132,11 +137,27 @@ export async function main(argv: string[]): Promise<number> {
     process.stdout.write(`${toolVersion()}\n`);
     return 0;
   }
+  if (positionals[0] === 'cache') {
+    const cacheDir = defaultCacheDir();
+    const sub = positionals[1];
+    if (!sub) {
+      const stats = cacheStats(cacheDir);
+      process.stdout.write(`Location: ${cacheDir}\nSize:     ${formatBytes(stats.bytes)} (${stats.count} files)\n`);
+      return 0;
+    }
+    if (sub === 'clean') {
+      cleanCache(cacheDir);
+      process.stdout.write(`Cleaned cache at ${cacheDir}\n`);
+      return 0;
+    }
+    fail(`Unknown cache command "ng-matrix cache ${sub}". See --help.`);
+  }
   if (positionals[0] === 'ci') fail('`ng-matrix ci github` is planned for v0.2.');
   if (positionals.length) fail(`Unknown argument "${positionals[0]}". See --help.`);
 
-  const format = values.format!;
+  const format = values.json ? 'json' : values.format!;
   if (!['terminal', 'markdown', 'json'].includes(format)) fail(`--format must be terminal, markdown or json, not "${format}".`);
+  if (values.verbose) setVerbose(true);
   const cwd = resolve(values.cwd ?? process.cwd());
   const pm = (values.pm ?? (existsSync(join(cwd, 'pnpm-lock.yaml')) ? 'pnpm' : 'npm')) as PackageManager;
   if (pm !== 'npm' && pm !== 'pnpm') fail(`--pm must be npm or pnpm (yarn and bun come later), not "${pm}".`);
@@ -146,7 +167,8 @@ export async function main(argv: string[]): Promise<number> {
     if (!(minutes > 0)) fail(`--step-timeout must be a number of minutes above 0, not "${values['step-timeout']}".`);
     setStepTimeout(minutes * 60_000);
   }
-  const log = (line: string) => process.stderr.write(`[ng-matrix] ${line}\n`);
+  const progress = new Progress(format !== 'json');
+  const log = (line: string) => progress.log(`[ng-matrix] ${line}`);
 
   const cacheDir = defaultCacheDir();
   const registry = new Registry({
@@ -218,12 +240,14 @@ export async function main(argv: string[]): Promise<number> {
         keep: values.keep,
         allowScripts: values['allow-scripts'],
         log,
+        progress,
       },
       angular,
       concurrency,
     );
 
     const report: Report = {
+      schemaVersion: SCHEMA_VERSION,
       tool: { name: 'angular-compat-matrix', version: toolVersion() },
       checkedAt: now.toISOString(),
       library: {
@@ -248,6 +272,7 @@ export async function main(argv: string[]): Promise<number> {
   } catch (error) {
     return explain(error);
   } finally {
+    progress.stop();
     stopListening();
     if (!values.keep) removeDir(workDir);
   }

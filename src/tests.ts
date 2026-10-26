@@ -32,6 +32,7 @@ export interface TestsOutcome {
   pass: boolean;
   message: string;
   errorLines: string[];
+  fullOutput?: string;
   durationMs: number;
   /** The machine's fault (a timeout, a full disk, the network), not the tests'. */
   environment?: string;
@@ -108,6 +109,7 @@ export async function runLibraryTests(request: TestsRequest): Promise<TestsOutco
       pass: false,
       message: `Installing the workspace with Angular ${request.angular.version} failed.`,
       errorLines: errorLines(install.output),
+      fullOutput: install.output,
       durationMs: Date.now() - started,
       environment: environmentProblem(install),
     };
@@ -120,6 +122,7 @@ export async function runLibraryTests(request: TestsRequest): Promise<TestsOutco
     pass: result.code === 0,
     message: result.code === 0 ? `\`${command}\` passed.` : `\`${command}\` exited with ${result.code}.`,
     errorLines: result.code === 0 ? tail.slice(-3) : errorLines(result.output),
+    fullOutput: result.output,
     durationMs: Date.now() - started,
     environment: result.code === 0 ? undefined : environmentProblem(result),
   };

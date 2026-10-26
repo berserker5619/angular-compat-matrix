@@ -18,12 +18,15 @@ export const CHECK_LABELS: Record<CheckName, string> = {
  */
 export type CheckStatus = 'pass' | 'fail' | 'not-run' | 'off' | 'none';
 
+export const SCHEMA_VERSION = 1;
+
 export interface CheckResult {
   status: CheckStatus;
   /** Partial only: a pass that proves nothing, because the package was compiled with a newer major. */
   advisory?: boolean;
   message: string;
   errorLines: string[];
+  fullOutput?: string;
   hint?: string;
   durationMs: number;
 }
@@ -59,6 +62,7 @@ export interface Finding {
 }
 
 export interface Report {
+  schemaVersion: number;
   tool: { name: string; version: string };
   checkedAt: string;
   library: {
