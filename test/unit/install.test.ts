@@ -36,16 +36,23 @@ describe('npm ls', () => {
 });
 
 describe('pnpm settings', () => {
-  it('is strict about peers, not about build scripts, and lets the tarball run its own', () => {
-    const yaml = pnpmWorkspaceYaml('my-lib', 'my-lib-1.0.0.tgz', {});
+  it('is strict about peers, and lets only the Angular toolchain run install scripts', () => {
+    const yaml = pnpmWorkspaceYaml({});
     assert.match(yaml, /^strictPeerDependencies: true$/m);
     assert.match(yaml, /^strictDepBuilds: false$/m);
-    assert.match(yaml, /^ {2}"my-lib@file:my-lib-1\.0\.0\.tgz": true$/m);
+    assert.match(yaml, /^allowBuilds:\n {2}"@parcel\/watcher": true\n {2}"esbuild": true\n {2}"lmdb": true\n {2}"msgpackr-extract": true$/m);
+    assert.doesNotMatch(yaml, /dangerouslyAllowAllBuilds|@file:/);
     assert.doesNotMatch(yaml, /peerDependencyRules/);
   });
 
+  it('lets every install script run with --allow-scripts', () => {
+    const yaml = pnpmWorkspaceYaml({}, true);
+    assert.match(yaml, /^dangerouslyAllowAllBuilds: true$/m);
+    assert.doesNotMatch(yaml, /allowBuilds:/);
+  });
+
   it('allows only the expected conflict, scoped to the package', () => {
-    const yaml = pnpmWorkspaceYaml('my-lib', 'my-lib-1.0.0.tgz', { 'my-lib>@angular/core': '22' });
+    const yaml = pnpmWorkspaceYaml({ 'my-lib>@angular/core': '22' });
     assert.match(yaml, /peerDependencyRules:\n {2}allowedVersions:\n {4}"my-lib>@angular\/core": "22"/);
   });
 });

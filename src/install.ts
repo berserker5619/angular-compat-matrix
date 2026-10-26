@@ -4,6 +4,7 @@ import semver from 'semver';
 import { type PackageManager, readJson, writeJson } from './app.ts';
 import { environmentProblem, errorLines, exec, npm, quietEnv, stepTimeout } from './exec.ts';
 import type { PeerPlan } from './peers.ts';
+import { npmInstall, pnpmBuildSettings } from './scripts.ts';
 import { ensureTool, PNPM_VERSION, pnpmEntry } from './tools.ts';
 
 export interface InstallRequest {
@@ -15,6 +16,8 @@ export interface InstallRequest {
   angularMajor: number;
   cacheDir: string;
   offline: boolean;
+  /** Let every install script run, not just the Angular toolchain's (--allow-scripts). */
+  allowScripts: boolean;
 }
 
 export interface InstallOutcome {
@@ -50,7 +53,7 @@ async function installWithNpm(request: InstallRequest, deps: Record<string, stri
   addDependencies(request.appDir, deps);
   const args = ['install', '--legacy-peer-deps', '--no-audit', '--no-fund'];
   if (request.offline) args.push('--offline');
-  const result = await npm(args, { cwd: request.appDir, timeoutMs: stepTimeout() });
+  const result = await npmInstall(args, { cwd: request.appDir, timeoutMs: stepTimeout() }, request.allowScripts);
   if (result.code !== 0) {
     return { pass: false, message: 'npm install failed.', errorLines: errorLines(result.output), ignored: [], environment: environmentProblem(result) };
   }
@@ -128,7 +131,7 @@ async function installWithPnpm(request: InstallRequest, deps: Record<string, str
       allowed[`${request.libraryName}>${miss.name}`] = major;
     }
   }
-  writeFileSync(join(request.appDir, 'pnpm-workspace.yaml'), pnpmWorkspaceYaml(request.libraryName, tgz, allowed));
+  writeFileSync(join(request.appDir, 'pnpm-workspace.yaml'), pnpmWorkspaceYaml(allowed, request.allowScripts));
   const pnpm = await ensureTool(request.cacheDir, 'pnpm', PNPM_VERSION, request.offline);
   const args = [pnpmEntry(pnpm), 'install', '--no-frozen-lockfile'];
   if (request.offline) args.push('--offline');
@@ -152,14 +155,8 @@ async function installWithPnpm(request: InstallRequest, deps: Record<string, str
   };
 }
 
-export function pnpmWorkspaceYaml(libraryName: string, tgz: string, allowed: Record<string, string>): string {
-  const lines = [
-    'strictPeerDependencies: true',
-    'strictDepBuilds: false',
-    'allowBuilds:',
-    // pnpm keys a tarball dependency by its full spec; the bare name doesn't match it.
-    `  ${JSON.stringify(`${libraryName}@file:${tgz}`)}: true`,
-  ];
+export function pnpmWorkspaceYaml(allowed: Record<string, string>, allowScripts = false): string {
+  const lines = ['strictPeerDependencies: true', ...pnpmBuildSettings(allowScripts)];
   if (Object.keys(allowed).length) {
     lines.push('peerDependencyRules:', '  allowedVersions:');
     for (const [key, range] of Object.entries(allowed)) lines.push(`    ${JSON.stringify(key)}: ${JSON.stringify(range)}`);

@@ -90,6 +90,7 @@ describe('rendering', () => {
     checkedAt: '2026-10-26T10:00:00.000Z',
     library: { name: 'my-dropdown', version: '3.0.0', source: 'test', compiledWith: '21.2.0', highestMinVersion: '20.0.0', declarations: 4 },
     packageManager: 'npm',
+    installScripts: 'toolchain-only',
     node: 'v24.19.0',
     versions: [
       version(19, true, { partial: partialFail }),

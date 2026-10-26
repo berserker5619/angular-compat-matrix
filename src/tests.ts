@@ -5,6 +5,7 @@ import { type PackageManager, readJson, writeJson } from './app.ts';
 import { environmentProblem, errorLines, exec, npm, quietEnv, stepTimeout } from './exec.ts';
 import { FRAMEWORK } from './peers.ts';
 import type { Registry } from './registry.ts';
+import { npmInstall, pnpmBuildSettings } from './scripts.ts';
 import { ensureTool, PNPM_VERSION, pnpmEntry, pnpmShimDir, withPath } from './tools.ts';
 import type { AngularMajor } from './versions.ts';
 
@@ -24,6 +25,7 @@ export interface TestsRequest {
   registry: Registry;
   cacheDir: string;
   offline: boolean;
+  allowScripts: boolean;
 }
 
 export interface TestsOutcome {
@@ -89,9 +91,9 @@ export async function runLibraryTests(request: TestsRequest): Promise<TestsOutco
   if (request.pm === 'npm') {
     const args = ['install', '--legacy-peer-deps', '--no-audit', '--no-fund'];
     if (request.offline) args.push('--offline');
-    install = await npm(args, { cwd: request.into, env, timeoutMs: stepTimeout() });
+    install = await npmInstall(args, { cwd: request.into, env, timeoutMs: stepTimeout() }, request.allowScripts);
   } else {
-    writeFileSync(join(request.into, 'pnpm-workspace.yaml'), 'strictPeerDependencies: false\nstrictDepBuilds: false\n');
+    writeFileSync(join(request.into, 'pnpm-workspace.yaml'), ['strictPeerDependencies: false', ...pnpmBuildSettings(request.allowScripts)].join('\n') + '\n');
     const pnpm = await ensureTool(request.cacheDir, 'pnpm', PNPM_VERSION, request.offline);
     // The test command runs in a shell; it has to find this pnpm, not whatever is (or isn't) installed.
     env = withPath(env, pnpmShimDir(request.cacheDir, pnpm));

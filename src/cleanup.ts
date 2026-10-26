@@ -104,7 +104,7 @@ export function cleanUpOnInterrupt(workDir: string, keep: boolean, log: (line: s
         log(`Couldn't remove ${workDir}: ${(error as Error).message}. The next run removes it.`);
       }
     }
-    process.exit(signal === 'SIGINT' ? 130 : 143);
+    process.exit(signal === 'SIGINT' || signal === 'SIGBREAK' ? 130 : 143);
   };
   const signals: NodeJS.Signals[] = process.platform === 'win32' ? ['SIGINT', 'SIGTERM', 'SIGBREAK'] : ['SIGINT', 'SIGTERM', 'SIGHUP'];
   for (const signal of signals) process.on(signal, handler);

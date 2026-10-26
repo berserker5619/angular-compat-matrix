@@ -13,6 +13,7 @@ import { Registry, RegistryError } from './registry.ts';
 import { exitCode, findings, renderJson, renderMarkdown, renderTerminal } from './report.ts';
 import { defaultConcurrency, runAll } from './run.ts';
 import { setStepTimeout } from './exec.ts';
+import { ALLOW_SCRIPTS_WARNING } from './scripts.ts';
 import { defaultCacheDir } from './tools.ts';
 import {
   type AngularMajor,
@@ -52,6 +53,8 @@ Options
   --concurrency <n>      Versions checked at once (default: as many as free memory allows)
   --step-timeout <min>   Longest any one step (ng new, install, build, tests) may take (default: 20)
   --keep                 Keep the temporary apps, for debugging
+  --allow-scripts        Let the package's (and its dependencies') install scripts run. By
+                         default only the Angular toolchain's own builds run (esbuild, lmdb...)
   --offline              Use only cached registry answers and packages
   --cwd <dir>            The library's workspace (default: the current folder)
   --verbose              Show every error line, not just the first few
@@ -104,6 +107,7 @@ export async function main(argv: string[]): Promise<number> {
       consumer: { type: 'string' },
       tests: { type: 'boolean', default: false },
       'test-command': { type: 'string' },
+      'allow-scripts': { type: 'boolean', default: false },
       format: { type: 'string', default: 'terminal' },
       pm: { type: 'string' },
       build: { type: 'string' },
@@ -156,6 +160,7 @@ export async function main(argv: string[]): Promise<number> {
   const workDir = createWorkDir();
   const stopListening = cleanUpOnInterrupt(workDir, values.keep, log);
   if (values.keep) log(`Working in ${workDir} (--keep)`);
+  if (values['allow-scripts']) log(ALLOW_SCRIPTS_WARNING);
 
   try {
     const library = await prepareLibrary(
@@ -211,6 +216,7 @@ export async function main(argv: string[]): Promise<number> {
         testCommand: values['test-command'],
         consumer,
         keep: values.keep,
+        allowScripts: values['allow-scripts'],
         log,
       },
       angular,
@@ -230,6 +236,7 @@ export async function main(argv: string[]): Promise<number> {
         declarations: summary.declarations,
       },
       packageManager: pm,
+      installScripts: values['allow-scripts'] ? 'all' : 'toolchain-only',
       node: process.version,
       versions,
       findings: findings(versions, library.manifest, angularImports(library.dir)),

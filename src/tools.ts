@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
-import { errorLines, npm } from './exec.ts';
+import { environmentProblem, errorLines, npm } from './exec.ts';
 
 /** The pnpm ng-matrix uses, pinned so its peer and build-script rules don't shift under it. */
 export const PNPM_VERSION = '12.15.0';
@@ -42,7 +42,8 @@ async function install(cacheDir: string, name: string, version: string, offline:
   const result = await npm(args, { cwd: tmp });
   if (result.code !== 0) {
     rmSync(tmp, { recursive: true, force: true });
-    throw new Error(`Couldn't download ${name}@${version}:\n${errorLines(result.output).join('\n')}`);
+    const why = environmentProblem(result);
+    throw new Error(`Couldn't download ${name}@${version}${why ? `: ${why}` : ''}:\n${errorLines(result.output).join('\n')}`);
   }
   mkdirSync(dirname(home), { recursive: true });
   try {

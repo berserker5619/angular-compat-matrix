@@ -65,6 +65,8 @@ export interface Report {
     declarations: number;
   };
   packageManager: string;
+  /** Which install scripts ran: only the Angular toolchain's (the default), or all (--allow-scripts). */
+  installScripts: 'toolchain-only' | 'all';
   node: string;
   versions: VersionReport[];
   findings: Finding[];

@@ -5,6 +5,8 @@
 //   node test/fixtures/run.ts healthy-npm   one case (CI runs one per job)
 //   node test/fixtures/run.ts --list        case names, as JSON
 import { spawn } from 'node:child_process';
+import { existsSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CheckName, Report } from '../../src/model.ts';
 
@@ -26,6 +28,8 @@ interface Case {
   says?: RegExp;
   /** The peerDependencies the "no @angular/* peer" finding must suggest. */
   suggests?: Record<string, string>;
+  /** Whether the canary package's postinstall must have run. */
+  canary?: 'ran' | 'blocked';
   /** For a run that must stop before checking anything: text stderr must contain. */
   stderr?: RegExp;
 }
@@ -120,6 +124,25 @@ cases.push(
     versions: { 22: claimed({ ...PASS, strict: 'fail' }) },
     says: /booleanAttribute/,
   },
+  // Install scripts: by default the package's postinstall must not run; with --allow-scripts it must.
+  ...(['npm', 'pnpm'] as const).flatMap((pm): Case[] => [
+    {
+      name: `install-scripts-blocked-${pm}`,
+      cwd: join(libs, 'install-script-canary'),
+      args: ['--versions', '22', '--pm', pm],
+      exit: 0,
+      versions: { 22: claimed(PASS) },
+      canary: 'blocked',
+    },
+    {
+      name: `install-scripts-allowed-${pm}`,
+      cwd: join(libs, 'install-script-canary'),
+      args: ['--versions', '22', '--pm', pm, '--allow-scripts'],
+      exit: 0,
+      versions: { 22: claimed(PASS) },
+      canary: 'ran',
+    },
+  ]),
   {
     name: 'consumer',
     cwd: join(libs, 'healthy'),
@@ -204,7 +227,12 @@ function observed(report: Report, major: number): Row {
 function run(c: Case): Promise<{ case: Case; problems: string[]; seconds: number }> {
   const started = Date.now();
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [cli, ...c.args, '--format', 'json'], { cwd: c.cwd });
+    const canaryFile = join(tmpdir(), `ngm-canary-${c.name}-${process.pid}`);
+    rmSync(canaryFile, { force: true });
+    const child = spawn(process.execPath, [cli, ...c.args, '--format', 'json'], {
+      cwd: c.cwd,
+      env: { ...process.env, NGM_CANARY_FILE: canaryFile },
+    });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d: Buffer) => (stdout += d));
@@ -213,6 +241,11 @@ function run(c: Case): Promise<{ case: Case; problems: string[]; seconds: number
       const problems: string[] = [];
       if (code !== c.exit) problems.push(`exit code ${code}, expected ${c.exit}`);
       if (c.stderr && !c.stderr.test(stderr)) problems.push(`stderr doesn't match ${c.stderr}:\n${stderr}`);
+      if (c.canary) {
+        const ran = existsSync(canaryFile);
+        rmSync(canaryFile, { force: true });
+        if (ran !== (c.canary === 'ran')) problems.push(`the package's postinstall ${ran ? 'ran' : "didn't run"}, expected it ${c.canary}`);
+      }
       if (c.versions) {
         let report: Report | undefined;
         try {
@@ -271,7 +304,12 @@ const take = async (): Promise<Case | undefined> => {
   for (;;) {
     if (!queue.length) return undefined;
     const index = queue.findIndex((c) => c.cwd === root || !busy.has(c.cwd));
-    if (index >= 0) return queue.splice(index, 1)[0];
+    if (index >= 0) {
+      // Marked busy here, before any await, so a second worker can't pick the same folder.
+      const picked = queue.splice(index, 1)[0];
+      busy.add(picked.cwd);
+      return picked;
+    }
     await new Promise((r) => setTimeout(r, 1000));
   }
 };
@@ -279,7 +317,6 @@ let failed = 0;
 await Promise.all(
   Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
     for (let c = await take(); c; c = await take()) {
-      busy.add(c.cwd);
       const outcome = await run(c).finally(() => busy.delete(c.cwd));
       if (outcome.problems.length) {
         failed++;

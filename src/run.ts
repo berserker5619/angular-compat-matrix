@@ -28,6 +28,8 @@ export interface RunContext {
   testCommand?: string;
   consumer?: string;
   keep: boolean;
+  /** Let every install script run, not just the Angular toolchain's (--allow-scripts). */
+  allowScripts: boolean;
   log: (line: string) => void;
 }
 
@@ -126,6 +128,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
       angularMajor: angular.major,
       cacheDir: ctx.cacheDir,
       offline: ctx.offline,
+      allowScripts: ctx.allowScripts,
     });
     if (installed.environment) return notChecked('The install', installed.environment, installed.errorLines);
     checks.install = result(installed.pass ? 'pass' : 'fail', installed.message, {
@@ -193,6 +196,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
           registry: ctx.registry,
           cacheDir: ctx.cacheDir,
           offline: ctx.offline,
+          allowScripts: ctx.allowScripts,
         });
         if (tests.environment) return notChecked('The library tests', tests.environment, tests.errorLines);
         checks.tests = result(tests.pass ? 'pass' : 'fail', tests.message, {
