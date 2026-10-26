@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { judgePartial, scanSource, summarize } from '../../src/partial.ts';
+import { angularImports, judgePartial, scanSource, summarize } from '../../src/partial.ts';
 
 // Shaped like Angular Material 22's sort.mjs: the factory understates its minVersion.
 const material22 = `
@@ -75,5 +78,21 @@ describe('judging a version', () => {
 
   it('passes a package with no declarations', () => {
     assert.equal(judgePartial(summarize([]), '17.3.12').pass, true);
+  });
+});
+
+describe('Angular imports', () => {
+  it('lists the @angular/* packages the published code imports', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ngm-imports-'));
+    try {
+      mkdirSync(join(dir, 'fesm2022'));
+      writeFileSync(
+        join(dir, 'fesm2022', 'lib.mjs'),
+        `import * as i0 from '@angular/core';\nimport { NgIf } from "@angular/common";\nimport { HttpClient } from '@angular/common/http';\nconst forms = import('@angular/forms');\nimport { of } from 'rxjs';`,
+      );
+      assert.deepEqual(angularImports(dir), ['@angular/common', '@angular/core', '@angular/forms']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -49,13 +49,8 @@ export interface PeerPlan {
   checked: Record<string, string>;
 }
 
-export function requiredPeers(manifest: LibraryManifest): Record<string, string> {
-  const peers: Record<string, string> = {};
-  for (const [name, range] of Object.entries(manifest.peerDependencies ?? {})) {
-    if (manifest.peerDependenciesMeta?.[name]?.optional) continue;
-    peers[name] = range;
-  }
-  return peers;
+function isOptional(manifest: LibraryManifest, name: string): boolean {
+  return Boolean(manifest.peerDependenciesMeta?.[name]?.optional);
 }
 
 /**
@@ -86,7 +81,7 @@ export function pickPeerVersion(packument: Packument, libraryRange: string, angu
 }
 
 export async function planPeers(manifest: LibraryManifest, angularVersion: string, registry: Registry): Promise<PeerPlan> {
-  const peers = requiredPeers(manifest);
+  const peers = manifest.peerDependencies ?? {};
   const installs: Record<string, string> = {};
   const checked: Record<string, string> = {};
   const misses: PeerMiss[] = [];
@@ -101,7 +96,9 @@ export async function planPeers(manifest: LibraryManifest, angularVersion: strin
       version = pickPeerVersion(await registry.get(name), range, angularVersion);
       if (version) installs[name] = version;
     }
-    if (!name.startsWith('@angular/')) continue;
+    // Optional peers are installed (the smoke app imports every entry point, and some entry point
+    // needs them, as angular-calendar's date-fns adapter needs date-fns) but claim nothing.
+    if (!name.startsWith('@angular/') || isOptional(manifest, name)) continue;
     angularPeers++;
     const against = version ?? 'none';
     checked[name] = against;

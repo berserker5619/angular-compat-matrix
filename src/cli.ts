@@ -8,7 +8,7 @@ import semver from 'semver';
 import type { PackageManager } from './app.ts';
 import { LibraryError, prepareLibrary } from './library.ts';
 import type { Report } from './model.ts';
-import { scanPackage, summarize } from './partial.ts';
+import { angularImports, scanPackage, summarize } from './partial.ts';
 import { Registry } from './registry.ts';
 import { exitCode, findings, renderJson, renderMarkdown, renderTerminal } from './report.ts';
 import { defaultConcurrency, runAll } from './run.ts';
@@ -217,7 +217,7 @@ export async function main(argv: string[]): Promise<number> {
       packageManager: pm,
       node: process.version,
       versions,
-      findings: findings(versions, library.manifest),
+      findings: findings(versions, library.manifest, angularImports(library.dir)),
       exitCode: exitCode(versions),
     };
     const render = format === 'json' ? renderJson : format === 'markdown' ? renderMarkdown : (r: Report) => renderTerminal(r, values.verbose);

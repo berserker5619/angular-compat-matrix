@@ -5,7 +5,7 @@ import { type PackageManager, readJson, writeJson } from './app.ts';
 import { errorLines, exec, npm, quietEnv } from './exec.ts';
 import { FRAMEWORK } from './peers.ts';
 import type { Registry } from './registry.ts';
-import { ensureTool, PNPM_VERSION, pnpmEntry } from './tools.ts';
+import { ensureTool, PNPM_VERSION, pnpmEntry, pnpmShimDir, withPath } from './tools.ts';
 import type { AngularMajor } from './versions.ts';
 
 /** Packages released with the Angular CLI, versioned with it. */
@@ -82,7 +82,7 @@ export async function runLibraryTests(request: TestsRequest): Promise<TestsOutco
   else delete manifest.packageManager;
   writeJson(manifestPath, manifest);
 
-  const env = quietEnv({ CI: '1' });
+  let env = quietEnv({ CI: '1' });
   let install;
   if (request.pm === 'npm') {
     const args = ['install', '--legacy-peer-deps', '--no-audit', '--no-fund'];
@@ -91,6 +91,8 @@ export async function runLibraryTests(request: TestsRequest): Promise<TestsOutco
   } else {
     writeFileSync(join(request.into, 'pnpm-workspace.yaml'), 'strictPeerDependencies: false\nstrictDepBuilds: false\n');
     const pnpm = await ensureTool(request.cacheDir, 'pnpm', PNPM_VERSION, request.offline);
+    // The test command runs in a shell; it has to find this pnpm, not whatever is (or isn't) installed.
+    env = withPath(env, pnpmShimDir(request.cacheDir, pnpm));
     install = await exec(process.execPath, [pnpmEntry(pnpm), 'install', '--no-frozen-lockfile'], {
       cwd: request.into,
       env,

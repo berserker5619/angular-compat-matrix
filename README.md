@@ -63,12 +63,12 @@ The Angular compiler writes a `minVersion` into each compiled declaration: the o
 
 ### The smoke app
 
-ng-matrix reads your package's typings, where Angular records each declaration's selector, inputs and standalone flag. It writes one component that:
+ng-matrix reads your package's typings, where Angular records each declaration's selector, inputs and standalone flag. It writes a small app that:
 
-- imports every entry point in your `exports` map
-- uses each component, directive and pipe once, with a correctly typed value for every required input
-- writes attribute selectors that take a boolean or string bare (`<div myFlag>`), the way users do
-- imports your NgModules and uses what they export, and injects your services
+- imports every entry point in your `exports` map, and installs your optional peers too, since some entry point may need them
+- uses each component, directive and pipe once, each in a component of its own (as an app would), with a correctly typed value for every required input
+- writes attribute selectors that take a boolean or string bare (`<div myFlag>`), the way users do, and binds the rest
+- imports each NgModule and uses what it exports, and injects your services
 
 If your library needs more setup than that (providers, content, a parent component), give ng-matrix an example app with `--consumer`. It's copied, its Angular dependencies are moved to each version, and your package is installed from the tarball.
 
@@ -118,4 +118,8 @@ npm ci --prefix fixtures       # the Angular 22 toolchain the fixture libraries 
 node test/fixtures/run.ts      # every fixture case (or name one, e.g. healthy-npm)
 ```
 
-`fixtures/libs` holds small libraries that each fail exactly one check: a feature newer than an older claimed major, a `minVersion` that's too low, peer ranges narrower and wider than reality, a CDK peer that leaves a version out, a type error only strict templates catch, typings only `skipLibCheck: false` catches, a kit over the default size budget, full compilation output, and tests that use a newer API. `fixtures/workspaces/cli-workspace` is an Angular CLI workspace, and `fixtures/consumers/healthy-example` an example app for `--consumer`. The suite also checks two published packages: Angular Material 22 and angular2-multiselect-dropdown 10.
+`fixtures/libs` holds small libraries that each fail exactly one check: a feature newer than an older claimed major, a `minVersion` that's too low, peer ranges narrower and wider than reality, a CDK peer that leaves a version out, a type error only strict templates catch, typings only `skipLibCheck: false` catches, a kit over the default size budget, full compilation output, and tests that use a newer API. `fixtures/workspaces/cli-workspace` is an Angular CLI workspace, and `fixtures/consumers/healthy-example` an example app for `--consumer`. The suite also checks published packages: Angular Material 22, angular2-multiselect-dropdown 10, ngx-toastr and angular-calendar. [docs/real-world-round.md](docs/real-world-round.md) has the results of a run against 15 popular libraries.
+
+## License
+
+MIT © 2026 Nizamudeen S

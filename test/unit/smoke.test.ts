@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { entryPoints, parseSelector, type PublicApi, renderSmoke } from '../../src/smoke.ts';
+import { type Declarable, entryPoints, parseSelector, type PublicApi, renderSmoke } from '../../src/smoke.ts';
 
 describe('selectors', () => {
   it('reads element, attribute and class selectors', () => {
@@ -131,8 +131,12 @@ const api: PublicApi = {
 describe('the smoke component', () => {
   const smoke = renderSmoke(api, { signalWriteBrand: true });
 
-  it('imports NgModules and the standalone declarables the template uses', () => {
-    assert.match(smoke.component, /imports: \[BadgeModule, CardComponent, ToggleDirective, ListComponent, SizeDirective, FormatPipe\]/);
+  it('gives each NgModule and each standalone declarable a component of its own', () => {
+    for (const name of ['BadgeModule', 'CardComponent', 'ToggleDirective', 'ListComponent', 'SizeDirective', 'FormatPipe']) {
+      assert.match(smoke.component, new RegExp(`imports: \\[${name}\\]`), name);
+    }
+    assert.match(smoke.component, /selector: 'app-root',\n  standalone: true,\n  imports: \[NgmUse0, NgmUse1, NgmUse2, NgmUse3, NgmUse4, NgmUse5\]/);
+    assert.match(smoke.component, /<ngm-use-5><\/ngm-use-5>/);
   });
 
   it("doesn't import an abstract base directive with no selector", () => {
@@ -144,8 +148,9 @@ describe('the smoke component', () => {
   });
 
   it('binds required inputs with values of their write type', () => {
-    assert.match(smoke.component, /<lib-card \[title\]="v0"><\/lib-card>/);
-    assert.match(smoke.component, /v0 = undefined as unknown as NgmWrite<typeof CardComponent, CardComponent, "title">/);
+    const name = /<lib-card \[title\]="(v\d+)"><\/lib-card>/.exec(smoke.component)?.[1];
+    assert.ok(name);
+    assert.match(smoke.component, new RegExp(`${name} = undefined as unknown as NgmWrite<typeof CardComponent, CardComponent, "title">`));
     assert.doesNotMatch(smoke.component, /\[elevation\]/);
   });
 
@@ -154,8 +159,8 @@ describe('the smoke component', () => {
   });
 
   it('uses components an NgModule exports, typed as any when they are not public', () => {
-    assert.match(smoke.component, /<lib-badge \[label\]="v1"><\/lib-badge>/);
-    assert.match(smoke.component, /v1 = undefined as unknown as any;/);
+    assert.match(smoke.component, /<lib-badge \[label\]="v0"><\/lib-badge>/);
+    assert.match(smoke.component, /v0 = undefined as unknown as any;/);
   });
 
   it('fills generic type parameters', () => {
@@ -183,5 +188,28 @@ describe('the smoke component', () => {
 
   it('counts what it used', () => {
     assert.deepEqual(smoke.counts, { components: 3, directives: 2, pipes: 1, modules: 1, services: 1 });
+  });
+
+  // Regression: ngx-toastr exports ToastBase and Toast, both with the selector [toast-component].
+  // In one template they both match the same element, which Angular 22 reports as NG8023.
+  it('never puts two exports with the same selector in one template', () => {
+    const same = (id: string, className: string): Declarable => ({
+      id,
+      kind: 'component',
+      className,
+      exportName: className,
+      entry: 'lib',
+      selector: '[toast-component]',
+      standalone: true,
+      inputs: [],
+      typeParams: 0,
+    });
+    const toastr = renderSmoke(
+      { entries: ['lib'], declarables: [same('a', 'ToastBase'), same('b', 'Toast')], pipes: [], modules: [], services: [] },
+      { signalWriteBrand: true },
+    );
+    const templates = [...toastr.component.matchAll(/template: `([^`]*)`/g)].map((m) => m[1]);
+    assert.equal(templates.filter((t) => t.includes('toast-component')).length, 2);
+    for (const template of templates) assert.ok((template.match(/toast-component/g) ?? []).length <= 1);
   });
 });

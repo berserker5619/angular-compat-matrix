@@ -24,6 +24,8 @@ interface Case {
   versions?: Record<number, Row>;
   /** Text one of the findings or hints must contain. */
   says?: RegExp;
+  /** The peerDependencies the "no @angular/* peer" finding must suggest. */
+  suggests?: Record<string, string>;
   /** For a run that must stop before checking anything: text stderr must contain. */
   stderr?: RegExp;
 }
@@ -58,6 +60,15 @@ for (const pm of ['npm', 'pnpm']) {
       exit: 0,
       versions: { 21: unclaimed(OLDER), 22: claimed(PASS) },
       says: /@angular\/cdk "\^22\.0\.0"/,
+    },
+    {
+      name: `tests-newer-api-${pm}`,
+      cwd: join(libs, 'tests-newer-api'),
+      args: ['--versions', '20-21', '--tests', '--pm', pm],
+      exit: 1,
+      versions: { 20: claimed({ ...OLDER, tests: 'fail' }), 21: claimed({ ...OLDER, tests: 'pass' }) },
+      // The reason matters: a test command that can't find pnpm exits with 1 too.
+      says: /isWritableSignal is missing from @angular\/core 20\./,
     },
     {
       name: `dts-only-${pm}`,
@@ -131,14 +142,6 @@ cases.push(
     stderr: /Refusing to pack .* full compilation mode/,
   },
   {
-    name: 'tests-newer-api',
-    cwd: join(libs, 'tests-newer-api'),
-    args: ['--versions', '20-21', '--tests'],
-    exit: 1,
-    versions: { 20: claimed({ ...OLDER, tests: 'fail' }), 21: claimed({ ...OLDER, tests: 'pass' }) },
-    says: /`npm test` exited with 1/,
-  },
-  {
     // The Angular 22 factory whose minVersion is too low, in the real package: Partial still catches
     // it on 21, through the ɵɵngDeclareService next to it.
     name: 'real-material-22-on-21',
@@ -157,6 +160,23 @@ cases.push(
     versions: { 22: claimed(PASS) },
   },
   {
+    // Regression: ToastBase and Toast share the selector [toast-component]. In one smoke template
+    // they matched the same element, and Angular 22 reports that as NG8023.
+    name: 'real-ngx-toastr',
+    cwd: root,
+    args: ['--package', 'ngx-toastr@20.0.5', '--versions', '22'],
+    exit: 0,
+    versions: { 22: unclaimed(PASS) },
+  },
+  {
+    // Regression: the date-fns adapter entry point needs date-fns, an optional peer.
+    name: 'real-angular-calendar',
+    cwd: root,
+    args: ['--package', 'angular-calendar@0.32.2', '--versions', '22'],
+    exit: 0,
+    versions: { 22: claimed(PASS) },
+  },
+  {
     // Checked by hand on Angular 18 to 22. It declares no peer dependencies at all.
     name: 'real-angular2-multiselect-dropdown',
     cwd: root,
@@ -164,6 +184,10 @@ cases.push(
     exit: 0,
     versions: Object.fromEntries([18, 19, 20, 21, 22].map((m) => [m, { peer: 'none', ...PASS }])),
     says: /declares no @angular\/\* peer dependency/,
+    // Its code imports @angular/core, @angular/common and @angular/forms.
+    suggests: Object.fromEntries(
+      ['@angular/common', '@angular/core', '@angular/forms'].map((name) => [name, '^18.0.0 || ^19.0.0 || ^20.0.0 || ^21.0.0 || ^22.0.0']),
+    ),
   },
 );
 
@@ -211,6 +235,12 @@ function run(c: Case): Promise<{ case: Case; problems: string[]; seconds: number
           }
           const setup = report.versions.filter((v) => v.setupError);
           for (const v of setup) problems.push(`Angular ${v.major} setup: ${v.setupError}`);
+          if (c.suggests) {
+            const suggested = report.findings.find((f) => f.suggestedPeerDependencies)?.suggestedPeerDependencies;
+            if (JSON.stringify(suggested) !== JSON.stringify(c.suggests)) {
+              problems.push(`suggested peers ${JSON.stringify(suggested)}, expected ${JSON.stringify(c.suggests)}`);
+            }
+          }
           if (c.says) {
             const text = JSON.stringify(report.findings) + JSON.stringify(report.versions.map((v) => v.checks));
             if (!c.says.test(text.replace(/\\"/g, '"'))) problems.push(`no finding matches ${c.says}`);

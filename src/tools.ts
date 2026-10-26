@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { errorLines, npm } from './exec.ts';
 
 /** The pnpm ng-matrix uses, pinned so its peer and build-script rules don't shift under it. */
@@ -67,4 +67,23 @@ export function binOf(pkgDir: string, bin: string): string {
 export function pnpmEntry(pkgDir: string): string {
   const entry = join(pkgDir, 'bin', 'pnpm.mjs');
   return existsSync(entry) ? entry : binOf(pkgDir, 'pnpm');
+}
+
+/**
+ * A folder with `pnpm` (and `pnpm.cmd` on Windows) that runs the cached pnpm, for PATH, so an
+ * author's test command (`pnpm test`, or a script that calls pnpm) finds the same pnpm.
+ */
+export function pnpmShimDir(cacheDir: string, pkgDir: string): string {
+  const dir = join(cacheDir, 'tools', `pnpm-shim@${PNPM_VERSION}`);
+  mkdirSync(dir, { recursive: true });
+  const entry = pnpmEntry(pkgDir);
+  writeFileSync(join(dir, 'pnpm'), `#!/bin/sh\nexec "${process.execPath}" "${entry}" "$@"\n`, { mode: 0o755 });
+  writeFileSync(join(dir, 'pnpm.cmd'), `@"${process.execPath}" "${entry}" %*\r\n`);
+  return dir;
+}
+
+/** PATH with `dir` first, under whichever spelling of the key this platform uses. */
+export function withPath(env: NodeJS.ProcessEnv, dir: string): NodeJS.ProcessEnv {
+  const key = Object.keys(env).find((k) => k.toUpperCase() === 'PATH') ?? 'PATH';
+  return { ...env, [key]: `${dir}${delimiter}${env[key] ?? ''}` };
 }

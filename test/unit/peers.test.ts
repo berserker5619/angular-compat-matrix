@@ -35,7 +35,9 @@ describe('peer range', () => {
     assert.equal(plan.claimed, null);
   });
 
-  it('skips optional peers', async () => {
+  // Regression: angular-calendar's date-fns adapter (an entry point the smoke app imports) needs
+  // date-fns, an optional peer. Skipping optional peers failed every build with "Could not resolve".
+  it('installs optional peers, but they claim nothing', async () => {
     const plan = await planPeers(
       {
         name: 'lib',
@@ -46,7 +48,10 @@ describe('peer range', () => {
       '22.2.3',
       registry,
     );
-    assert.deepEqual(Object.keys(plan.installs), ['@angular/core']);
+    assert.deepEqual(Object.keys(plan.installs), ['@angular/core', '@angular/cdk']);
+    assert.match(plan.installs['@angular/cdk'], /^22\./);
+    assert.equal(plan.claimed, true);
+    assert.deepEqual(Object.keys(plan.checked), ['@angular/core']);
   });
 });
 

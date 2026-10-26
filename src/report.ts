@@ -20,7 +20,12 @@ export function exitCode(versions: VersionReport[]): number {
   return versions.some((v) => v.claimed === true && firstFailure(v)) ? 1 : 0;
 }
 
-export function findings(versions: VersionReport[], manifest: { peerDependencies?: Record<string, string> }): Finding[] {
+export function findings(
+  versions: VersionReport[],
+  manifest: { peerDependencies?: Record<string, string> },
+  /** The `@angular/*` packages the published code imports. */
+  angularImports: string[] = ['@angular/core'],
+): Finding[] {
   const raw: Array<Finding & { key: string }> = [];
   for (const version of versions) {
     const m = version.major;
@@ -70,18 +75,30 @@ export function findings(versions: VersionReport[], manifest: { peerDependencies
   }
 
   const hasAngularPeer = Object.keys(manifest.peerDependencies ?? {}).some((n) => n.startsWith('@angular/'));
-  if (!hasAngularPeer) {
-    const working = versions.filter(works).map((v) => v.major);
-    merged.push({
-      level: 'warning',
-      majors: [],
-      text: working.length
-        ? `The package declares no @angular/* peer dependency, so it claims no version. From this run, "@angular/core": "${working.map((m) => `^${m}.0.0`).join(' || ')}" would be accurate.`
-        : 'The package declares no @angular/* peer dependency, so it claims no version.',
-    });
-  }
+  if (!hasAngularPeer) merged.push(missingPeersFinding(versions, angularImports));
   const order = { error: 0, warning: 1, note: 2 };
   return merged.sort((a, b) => order[a.level] - order[b.level]);
+}
+
+/**
+ * A package without `@angular/*` peers claims nothing, so nothing tells a package manager which
+ * Angular it needs. The hint suggests a range from the majors that passed every check, for each
+ * Angular package the published code imports.
+ */
+function missingPeersFinding(versions: VersionReport[], angularImports: string[]): Finding {
+  const working = versions.filter((v) => works(v) && !v.prerelease).map((v) => v.major);
+  const text = "The package declares no @angular/* peer dependency, so it claims no version and package managers can't warn about a mismatch.";
+  if (!working.length) return { level: 'warning', majors: [], text: `${text} No version passed in this run, so there's no range to suggest.` };
+  const range = [...new Set(working)].sort((a, b) => a - b).map((m) => `^${m}.0.0`).join(' || ');
+  const packages = [...new Set(['@angular/core', ...angularImports])].sort();
+  const suggested = Object.fromEntries(packages.map((name) => [name, range]));
+  const lines = packages.map((name) => `"${name}": "${range}"`).join(', ');
+  return {
+    level: 'warning',
+    majors: [],
+    text: `${text} From the versions that passed: ${lines}.`,
+    suggestedPeerDependencies: suggested,
+  };
 }
 
 export function majorsText(majors: number[]): string {

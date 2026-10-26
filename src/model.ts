@@ -48,6 +48,8 @@ export interface Finding {
   level: 'error' | 'warning' | 'note';
   majors: number[];
   text: string;
+  /** For a package with no `@angular/*` peer: the peerDependencies this run supports. */
+  suggestedPeerDependencies?: Record<string, string>;
 }
 
 export interface Report {

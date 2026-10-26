@@ -59,6 +59,21 @@ describe('findings', () => {
     assert.match(list[1].text, /works, but peerDependencies doesn't allow it \(@angular\/core "\^21\.0\.0"\)/);
   });
 
+  it('suggests peers for every Angular package the code imports, from the majors that passed', () => {
+    const list = findings([version(20, null, {}), version(21, null, {}), version(22, null, { aot: result('fail', 'x') })], {}, [
+      '@angular/common',
+      '@angular/forms',
+    ]);
+    const range = '^20.0.0 || ^21.0.0';
+    assert.deepEqual(list.at(-1)!.suggestedPeerDependencies, { '@angular/common': range, '@angular/core': range, '@angular/forms': range });
+  });
+
+  it('has no range to suggest when nothing passed', () => {
+    const list = findings([version(22, null, { aot: result('fail', 'x') })], {});
+    assert.equal(list.at(-1)!.suggestedPeerDependencies, undefined);
+    assert.match(list.at(-1)!.text, /no range to suggest/);
+  });
+
   it('suggests a peer range when the package declares none', () => {
     const list = findings([version(20, null, {}), version(21, null, {}), version(22, null, { aot: result('fail', 'x') })], {});
     assert.match(list.at(-1)!.text, /"@angular\/core": "\^20\.0\.0 \|\| \^21\.0\.0"/);

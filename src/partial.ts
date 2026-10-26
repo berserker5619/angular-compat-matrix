@@ -91,3 +91,19 @@ export function judgePartial(summary: PartialSummary, angularVersion: string): P
       : `Highest minVersion ${highest.minVersion}, in ${where}.`,
   };
 }
+
+/** The `@angular/*` packages the published JavaScript imports (`@angular/common/http` counts as `@angular/common`). */
+export function angularImports(dir: string): string[] {
+  const found = new Set<string>();
+  const specifier = /(?:\bfrom|\bimport)\s*\(?\s*["'](@angular\/[\w.-]+)(?:\/[^"']*)?["']/g;
+  const walk = (current: string) => {
+    for (const entry of readdirSync(current)) {
+      if (entry === 'node_modules') continue;
+      const path = join(current, entry);
+      if (statSync(path).isDirectory()) walk(path);
+      else if (/\.(mjs|js|cjs)$/.test(entry)) for (const match of readFileSync(path, 'utf8').matchAll(specifier)) found.add(match[1]);
+    }
+  };
+  walk(dir);
+  return [...found].sort();
+}

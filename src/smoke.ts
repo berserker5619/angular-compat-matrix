@@ -419,28 +419,23 @@ export function renderSmoke(api: PublicApi, options: SmokeOptions): SmokeFiles {
     return name;
   };
 
-  const componentImports: string[] = [];
-  const template: string[] = [];
-  const fields: string[] = [];
+  /*
+   * Each use gets a small component of its own, the way an app uses a library: one standalone
+   * declarable, or one NgModule and what it exports. Exports that are never meant to share a
+   * template (two components with the same selector, say) never do.
+   */
+  interface Use {
+    imports: string[];
+    template: string[];
+    fields: string[];
+  }
+  const uses: Use[] = [];
   const counts = { components: 0, directives: 0, pipes: 0, modules: 0, services: 0 };
   let field = 0;
-  // What NgModules export is usable through them; standalone declarables are imported one by one,
-  // but only when the template uses them: an abstract base directive (no selector) can't go in
-  // `imports`, and an unused import is a warning.
-  const viaModule = new Set<string>();
-  for (const module of api.modules) {
-    componentImports.push(local(module.entry, module.exportName));
-    counts.modules++;
-    for (const id of module.exports) viaModule.add(id);
-  }
-  const importable = (item: { standalone: boolean; exportName?: string; entry?: string }) =>
-    item.standalone && Boolean(item.exportName && item.entry);
 
-  for (const declarable of api.declarables) {
-    if (!viaModule.has(declarable.id) && !importable(declarable)) continue;
+  const element = (declarable: Declarable, fields: string[]): string | undefined => {
     const selector = declarable.selector ? parseSelector(declarable.selector) : undefined;
-    if (!selector) continue;
-    if (!viaModule.has(declarable.id)) componentImports.push(local(declarable.entry!, declarable.exportName!));
+    if (!selector) return undefined;
     const selectorAttributes = new Set(selector.attributes.map((a) => a.name));
     // Required inputs get a value; so does a selector attribute that is a number or object input,
     // since users bind those rather than writing them bare.
@@ -463,31 +458,61 @@ export function renderSmoke(api: PublicApi, options: SmokeOptions): SmokeFiles {
     }
     const tag = selector.tag ?? 'div';
     const open = `<${tag}${attrs.length ? ' ' + attrs.join(' ') : ''}>`;
-    template.push(VOID_ELEMENTS.has(tag.toLowerCase()) ? open : `${open}</${tag}>`);
     counts[declarable.kind === 'component' ? 'components' : 'directives']++;
-  }
+    return VOID_ELEMENTS.has(tag.toLowerCase()) ? open : `${open}</${tag}>`;
+  };
 
-  const pipes = api.pipes.filter((p) => p.pipeName && (viaModule.has(p.id) || importable(p)));
-  if (pipes.length) {
-    fields.push('  protected readonly pipeValue: any = undefined;', '  protected readonly pipeArg: any = undefined;');
-  }
-  for (const pipe of pipes) {
-    if (!viaModule.has(pipe.id)) componentImports.push(local(pipe.entry!, pipe.exportName!));
-    const args = Array.from({ length: pipe.extraArgs }, () => ' : pipeArg').join('');
-    template.push(`<span>{{ pipeValue | ${pipe.pipeName}${args} }}</span>`);
+  const pipeUse = (pipe: PipeInfo, fields: string[]): string => {
+    if (!fields.some((f) => f.includes('pipeValue'))) {
+      fields.push('  protected readonly pipeValue: any = undefined;', '  protected readonly pipeArg: any = undefined;');
+    }
     counts.pipes++;
+    const args = Array.from({ length: pipe.extraArgs }, () => ' : pipeArg').join('');
+    return `<span>{{ pipeValue | ${pipe.pipeName}${args} }}</span>`;
+  };
+
+  // An NgModule, with everything it exports used in one template, as its users would.
+  for (const module of api.modules) {
+    const use: Use = { imports: [local(module.entry, module.exportName)], template: [], fields: [] };
+    counts.modules++;
+    for (const id of module.exports) {
+      const declarable = api.declarables.find((d) => d.id === id);
+      const pipe = api.pipes.find((p) => p.id === id);
+      const line = declarable ? element(declarable, use.fields) : pipe?.pipeName ? pipeUse(pipe, use.fields) : undefined;
+      if (line) use.template.push(line);
+    }
+    uses.push(use);
+  }
+  // Standalone declarables and pipes, one at a time. Only those with a selector are imported: an
+  // abstract base directive can't go in `imports`, and an unused import is a warning.
+  const importable = (item: { standalone: boolean; exportName?: string; entry?: string }) =>
+    item.standalone && Boolean(item.exportName && item.entry);
+  for (const declarable of api.declarables) {
+    if (!importable(declarable)) continue;
+    const use: Use = { imports: [], template: [], fields: [] };
+    const line = element(declarable, use.fields);
+    if (!line) continue;
+    use.imports.push(local(declarable.entry!, declarable.exportName!));
+    use.template.push(line);
+    uses.push(use);
+  }
+  for (const pipe of api.pipes) {
+    if (!importable(pipe) || !pipe.pipeName) continue;
+    const use: Use = { imports: [local(pipe.entry!, pipe.exportName!)], template: [], fields: [] };
+    use.template.push(pipeUse(pipe, use.fields));
+    uses.push(use);
   }
 
+  const rootFields: string[] = [];
   for (const service of api.services) {
     const name = local(service.entry, service.exportName);
     const type = service.typeParams ? `${name}<${Array(service.typeParams).fill('any').join(', ')}>` : name;
-    fields.push(`  protected readonly s${field++} = inject<${type}>(${name}, { optional: true });`);
+    rootFields.push(`  protected readonly s${field++} = inject<${type}>(${name}, { optional: true });`);
     counts.services++;
   }
-
   // Namespace imports pull every export into the bundle, so the linker sees every declaration.
   const namespaces = api.entries.map((entry, i) => `import * as ngmEntry${i} from ${JSON.stringify(entry)};`);
-  fields.unshift(`  protected readonly ngmEntries = [${api.entries.map((_, i) => `ngmEntry${i}`).join(', ')}];`);
+  rootFields.unshift(`  protected readonly ngmEntries = [${api.entries.map((_, i) => `ngmEntry${i}`).join(', ')}];`);
 
   const named = new Map<string, string[]>();
   for (const [key, localName] of names) {
@@ -508,7 +533,21 @@ export function renderSmoke(api: PublicApi, options: SmokeOptions): SmokeFiles {
     : I[K];`
     : `type NgmWrite<S, I, K extends keyof I> = S extends { [P in \`ngAcceptInputType_\${K & string}\`]: infer A } ? A : I[K];`;
 
-  const component = `// Generated by ng-matrix: uses every public export of the package once.
+  const component = (name: string, selector: string, imports: string[], template: string[], fields: string[]) => `@Component({
+  selector: '${selector}',
+  standalone: true,
+  imports: [${imports.join(', ')}],
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
+  template: \`
+${template.map((line) => '    ' + escapeTemplate(line)).join('\n')}
+  \`,
+})
+${name === 'NgmSmoke' ? 'export ' : ''}class ${name} {
+${fields.join('\n')}
+}
+`;
+  const useNames = uses.map((_, i) => `NgmUse${i}`);
+  const source = `// Generated by ng-matrix: uses every public export of the package once.
 import { ${coreImports.join(', ')} } from '@angular/core';
 ${namespaces.join('\n')}
 ${namedImports.join('\n')}
@@ -516,26 +555,21 @@ ${namedImports.join('\n')}
 /** The type a template binding to this input must have. */
 ${writeHelper}
 
-@Component({
-  selector: 'app-root',
-  standalone: true,
-  imports: [${componentImports.join(', ')}],
-  schemas: [CUSTOM_ELEMENTS_SCHEMA],
-  template: \`
-${template.map((line) => '    ' + escapeTemplate(line)).join('\n')}
-  \`,
-})
-export class NgmSmoke {
-${fields.join('\n')}
-}
-`;
+${uses.map((use, i) => component(useNames[i], `ngm-use-${i}`, use.imports, use.template, use.fields)).join('\n')}
+${component(
+  'NgmSmoke',
+  'app-root',
+  useNames,
+  useNames.map((_, i) => `<ngm-use-${i}></ngm-use-${i}>`),
+  rootFields,
+)}`;
   const main = `// Generated by ng-matrix.
 import { bootstrapApplication } from '@angular/platform-browser';
 import { NgmSmoke } from './ngm-smoke';
 
 bootstrapApplication(NgmSmoke).catch((error) => console.error(error));
 `;
-  return { component, main, counts };
+  return { component: source, main, counts };
 }
 
 function writeType(className: string, typeParams: number, property: string): string {
