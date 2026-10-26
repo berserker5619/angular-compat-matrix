@@ -46,7 +46,7 @@ async function interruptAt(step: string): Promise<{ code: number | null; log: st
       if (!sent && new RegExp(step).test(log)) {
         sent = true;
         // Give the step a moment to really start (npm resolving, the compiler running).
-        setTimeout(() => child.kill('SIGINT'), 4000);
+        setTimeout(() => child.kill('SIGINT'), step.includes('AOT') ? 1000 : 3000);
       }
     });
     child.on('close', (code) => resolve({ code, log }));
