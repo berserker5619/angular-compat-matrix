@@ -95,21 +95,15 @@ describe('findings', () => {
     assert.match(notes[0].text, /core-js@3\.46\.0/);
   });
 
-  it('reports skipLibCheck failures as a separate finding without strict-templates label', () => {
-    const list = findings(
-      [
-        version(22, true, {
-          strict: result('fail', 'library typings have errors with skipLibCheck: false', {
-            hint: 'library typings have errors with skipLibCheck: false',
-          }),
-        }),
-      ],
-      { peerDependencies: { '@angular/core': '^22.0.0' } },
-    );
+  it('reports skipLibCheck typings errors as a warning finding and does not fail exit code', () => {
+    const v22 = version(22, true, {});
+    v22.dtsErrors = true;
+    const list = findings([v22], { peerDependencies: { '@angular/core': '^22.0.0' } });
     assert.equal(list.length, 1);
-    assert.equal(list[0].level, 'error');
+    assert.equal(list[0].level, 'warning');
     assert.deepEqual(list[0].majors, [22]);
     assert.equal(list[0].text, 'library typings have errors with skipLibCheck: false');
+    assert.equal(exitCode([v22]), 0);
   });
 
   it('reports undeclared entry point dependencies as warnings', () => {

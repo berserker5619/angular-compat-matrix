@@ -171,9 +171,26 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
     while (!aot.pass && !ctx.consumer && api) {
       const undeclared = findUndeclaredImports(aot.errorLines, ctx.library.manifest as any, api.entries);
       if (!undeclared.length) break;
-      omittedList.push(...undeclared);
+
+      const mainName = ctx.library.manifest.name;
+      const isMain = (entry: string) => entry === mainName || entry === '.';
+      const mainUndeclared = undeclared.find((u) => isMain(u.entry));
       const omittedSet = new Set(undeclared.map((u) => u.entry));
-      api.entries = api.entries.filter((e) => !omittedSet.has(e));
+      const remainingEntries = api.entries.filter((e) => !omittedSet.has(e));
+
+      if (mainUndeclared || remainingEntries.length === 0) {
+        const item = mainUndeclared ?? undeclared[0];
+        const reason = `${item.entry} imports ${item.missingPackage}, which isn't declared in dependencies or peers. Every user of ${item.entry} needs ${item.missingPackage} installed.`;
+        checks.aot = result('fail', reason, {
+          errorLines: aot.errorLines,
+          hint: reason,
+          durationMs: aot.durationMs,
+        });
+        return finish();
+      }
+
+      omittedList.push(...undeclared);
+      api.entries = remainingEntries;
       api.declarables = api.declarables.filter((d) => !d.entry || !omittedSet.has(d.entry));
       api.pipes = api.pipes.filter((p) => !p.entry || !omittedSet.has(p.entry));
       api.modules = api.modules.filter((m) => !omittedSet.has(m.entry));
@@ -198,19 +215,24 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
     const strict = await ngBuild(appDir, project.tsConfig, { strictTemplates: true, skipLibCheck: false }, files);
     if (strict.environment) return notChecked('The strict build', strict.environment, strict.errorLines);
     const dtsOnly = !strict.pass && isDtsOnlyFailure(strict.errorLines);
+    if (dtsOnly) {
+      report.dtsErrors = true;
+    }
     const dtsHint = strict.hint ?? (dtsOnly ? 'library typings have errors with skipLibCheck: false' : undefined);
     checks.strict = result(
-      strict.pass ? 'pass' : 'fail',
+      strict.pass || dtsOnly ? 'pass' : 'fail',
       strict.pass
         ? 'Builds with strictTemplates: true and skipLibCheck: false.'
-        : dtsHint ?? 'Fails with strictTemplates: true and skipLibCheck: false.',
+        : dtsOnly
+          ? 'Builds with strictTemplates: true; library typings have errors with skipLibCheck: false.'
+          : (dtsHint ?? 'Fails with strictTemplates: true and skipLibCheck: false.'),
       {
         errorLines: strict.errorLines,
         hint: dtsHint,
         durationMs: strict.durationMs,
       },
     );
-    if (!strict.pass) return finish();
+    if (checks.strict.status === 'fail') return finish();
 
     if (ctx.tests) {
       if (!ctx.workspace) {

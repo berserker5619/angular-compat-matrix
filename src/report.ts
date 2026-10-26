@@ -38,27 +38,17 @@ export function findings(
       const [name, check] = failure;
       // Partial's message names the declaration; a build's message is just "failed", so its hint says more.
       const why = name === 'partial' && check.hint ? `${check.message} ${check.hint}` : (check.hint ?? check.message);
-      if (name === 'strict' && check.hint === 'library typings have errors with skipLibCheck: false') {
-        const level = version.claimed === true ? 'error' : version.claimed === false ? 'note' : 'warning';
+      if (version.claimed === true) {
+        raw.push({ level: 'error', majors: [m], key: `fail:${name}:${why}`, text: `${CHECK_LABELS[name]}: ${why}` });
+      } else if (version.claimed === false) {
         raw.push({
-          level,
+          level: 'note',
           majors: [m],
-          key: 'skipLibCheck:dts-errors',
-          text: 'library typings have errors with skipLibCheck: false',
+          key: `outside:${name}`,
+          text: `${CHECK_LABELS[name]} fails, but the peer range doesn't claim this version, so that's expected.`,
         });
       } else {
-        if (version.claimed === true) {
-          raw.push({ level: 'error', majors: [m], key: `fail:${name}:${why}`, text: `${CHECK_LABELS[name]}: ${why}` });
-        } else if (version.claimed === false) {
-          raw.push({
-            level: 'note',
-            majors: [m],
-            key: `outside:${name}`,
-            text: `${CHECK_LABELS[name]} fails, but the peer range doesn't claim this version, so that's expected.`,
-          });
-        } else {
-          raw.push({ level: 'warning', majors: [m], key: `fail:${name}:${why}`, text: `${CHECK_LABELS[name]}: ${why}` });
-        }
+        raw.push({ level: 'warning', majors: [m], key: `fail:${name}:${why}`, text: `${CHECK_LABELS[name]}: ${why}` });
       }
       if (version.skippedInstallScripts?.length) {
         const list = version.skippedInstallScripts.join(', ');
@@ -87,6 +77,14 @@ export function findings(
           text: `entry point ${item.entry} imports ${item.missingPackage}, which isn't declared in dependencies or peers`,
         });
       }
+    }
+    if (version.dtsErrors) {
+      raw.push({
+        level: 'warning',
+        majors: [m],
+        key: 'skipLibCheck:dts-errors',
+        text: 'library typings have errors with skipLibCheck: false',
+      });
     }
   }
 

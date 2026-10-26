@@ -44,6 +44,8 @@ export interface VersionReport {
   skippedInstallScripts?: string[];
   /** Entry points left out of the build because they import packages not declared in dependencies or peers. */
   omittedEntryPoints?: Array<{ entry: string; missingPackage: string }>;
+  /** Whether strict build had typing errors only in node_modules .d.ts files with skipLibCheck: false. */
+  dtsErrors?: boolean;
   durationMs: number;
   appDir?: string;
 }

@@ -1,0 +1,15 @@
+{
+  "name": "ngm-fixture-undeclared-main",
+  "version": "1.0.0",
+  "description": "Fixture: main entry point imports an undeclared package at runtime (like lodash). The AOT build fails.",
+  "scripts": {
+    "build": "ng-packagr -p ng-package.json && node inject-undeclared.mjs"
+  },
+  "peerDependencies": {
+    "@angular/common": "^22.0.0",
+    "@angular/core": "^22.0.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  }
+}

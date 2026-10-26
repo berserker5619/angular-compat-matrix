@@ -78,13 +78,21 @@ for (const pm of ['npm', 'pnpm']) {
       name: `dts-only-${pm}`,
       cwd: join(libs, 'dts-only'),
       args: ['--versions', '21-22', '--pm', pm],
-      exit: 1,
-      versions: { 21: claimed({ ...OLDER, strict: 'fail' }), 22: claimed(PASS) },
-      says: /typings use DebounceTimer/,
+      exit: 0,
+      versions: { 21: claimed(OLDER), 22: claimed(PASS) },
+      says: /library typings have errors with skipLibCheck: false/,
     },
   );
 }
 cases.push(
+  {
+    name: 'undeclared-main',
+    cwd: join(libs, 'undeclared-main'),
+    args: ['--versions', '22'],
+    exit: 1,
+    versions: { 22: claimed({ install: 'pass', partial: 'pass', aot: 'fail', strict: 'not-run' }) },
+    says: /ngm-fixture-undeclared-main imports lodash, which isn't declared in dependencies or peers\. Every user of ngm-fixture-undeclared-main needs lodash installed\./,
+  },
   {
     name: 'cli-workspace',
     cwd: join(root, 'fixtures', 'workspaces', 'cli-workspace'),
