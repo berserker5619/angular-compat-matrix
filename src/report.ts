@@ -264,6 +264,21 @@ export function renderMarkdown(report: Report): string {
   return lines.join('\n') + '\n';
 }
 
-export function renderJson(report: Report): string {
-  return JSON.stringify(report, null, 2) + '\n';
+export function renderJson(report: Report, verbose = false): string {
+  if (verbose) {
+    return JSON.stringify(report, null, 2) + '\n';
+  }
+  const stripped: Report = {
+    ...report,
+    versions: report.versions.map((v) => ({
+      ...v,
+      checks: Object.fromEntries(
+        Object.entries(v.checks).map(([name, check]) => {
+          const { fullOutput: _full, ...rest } = check;
+          return [name, rest];
+        }),
+      ) as Record<CheckName, CheckResult>,
+    })),
+  };
+  return JSON.stringify(stripped, null, 2) + '\n';
 }

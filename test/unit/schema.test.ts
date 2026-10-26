@@ -7,6 +7,7 @@ import {
   SCHEMA_VERSION,
   type VersionReport,
 } from '../../src/model.ts';
+import { renderJson } from '../../src/report.ts';
 
 describe('JSON schema contract', () => {
   it('schemaVersion is 1', () => {
@@ -54,7 +55,18 @@ describe('JSON schema contract', () => {
     'supported',
   ];
 
-  const EXPECTED_CHECK_KEYS = [
+  // Default output (non-verbose): fullOutput is omitted, errorLines is always present
+  const EXPECTED_CHECK_KEYS_DEFAULT = [
+    'advisory',
+    'durationMs',
+    'errorLines',
+    'hint',
+    'message',
+    'status',
+  ];
+
+  // Verbose output: fullOutput is optionally included alongside errorLines
+  const EXPECTED_CHECK_KEYS_VERBOSE = [
     'advisory',
     'durationMs',
     'errorLines',
@@ -137,7 +149,18 @@ describe('JSON schema contract', () => {
     assert.deepEqual(Object.keys(sampleReport.tool).sort(), EXPECTED_TOOL_KEYS);
     assert.deepEqual(Object.keys(sampleReport.library).sort(), EXPECTED_LIBRARY_KEYS);
     assert.deepEqual(Object.keys(sampleReport.versions[0]).sort(), EXPECTED_VERSION_KEYS);
-    assert.deepEqual(Object.keys(sampleReport.versions[0].checks.aot).sort(), EXPECTED_CHECK_KEYS);
     assert.deepEqual(Object.keys(sampleReport.findings[0]).sort(), EXPECTED_FINDING_KEYS);
+
+    // Default JSON output: fullOutput is omitted
+    const defaultJson = JSON.parse(renderJson(sampleReport, false)) as Report;
+    assert.deepEqual(Object.keys(defaultJson.versions[0].checks.aot).sort(), EXPECTED_CHECK_KEYS_DEFAULT);
+    assert.equal(defaultJson.versions[0].checks.aot.fullOutput, undefined);
+    assert.deepEqual(defaultJson.versions[0].checks.aot.errorLines, ['error line 1']);
+
+    // Verbose JSON output: fullOutput is present
+    const verboseJson = JSON.parse(renderJson(sampleReport, true)) as Report;
+    assert.deepEqual(Object.keys(verboseJson.versions[0].checks.aot).sort(), EXPECTED_CHECK_KEYS_VERBOSE);
+    assert.equal(verboseJson.versions[0].checks.aot.fullOutput, 'full output');
+    assert.deepEqual(verboseJson.versions[0].checks.aot.errorLines, ['error line 1']);
   });
 });

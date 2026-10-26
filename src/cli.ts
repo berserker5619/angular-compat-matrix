@@ -266,7 +266,7 @@ export async function main(argv: string[]): Promise<number> {
       findings: findings(versions, library.manifest, angularImports(library.dir)),
       exitCode: exitCode(versions),
     };
-    const render = format === 'json' ? renderJson : format === 'markdown' ? renderMarkdown : (r: Report) => renderTerminal(r, values.verbose);
+    const render = format === 'json' ? (r: Report) => renderJson(r, values.verbose) : format === 'markdown' ? renderMarkdown : (r: Report) => renderTerminal(r, values.verbose);
     process.stdout.write((format === 'terminal' ? '\n' : '') + render(report));
     return report.exitCode;
   } catch (error) {

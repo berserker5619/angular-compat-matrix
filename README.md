@@ -20,9 +20,7 @@ Angular 22      ✗          ✓        ✓         ✓           ✓
 ✗ 19: partial: Needs Angular 20.0.0 or later: highest minVersion 20.0.0, in
   MyDropdownComponent. Build the library with the oldest Angular you support, or take
   this version out of the peer range.
-✗ 20: strict types: A template using the package type-checks only loosely: with strict templates,
-  Angular reports the error above. If it comes from a bare attribute like <div myDirective>, give
-  that boolean input a booleanAttribute transform.
+✗ 20: strict types: Fails with strictTemplates: true and skipLibCheck: false.
 ! 22: works, but peerDependencies doesn't allow it (@angular/core "^19.0.0 || ^20.0.0 ||
   ^21.0.0"). Widen the range to include it.
 ```
@@ -298,7 +296,7 @@ The top-level field `schemaVersion` is guaranteed. Any future additions or modif
     - `status`: `'pass' | 'fail' | 'not-run' | 'off' | 'none'`.
     - `message`: Summary message.
     - `errorLines`: First relevant error lines extracted from build or install logs.
-    - `fullOutput` (`string?`): Full command stdout and stderr on failure (accessible with `--verbose`).
+    - `fullOutput` (`string?`): Full command stdout and stderr on failure (optional; present only when `--verbose` is used).
     - `hint` (`string?`): Plain-language diagnostic hint.
     - `durationMs`: Execution duration in milliseconds.
     - `advisory` (`boolean?`): `true` when partial check passed only on `minVersion` despite being built with newer Angular.
@@ -335,17 +333,11 @@ Here are the most common real-world incompatibilities identified across popular 
 - **Handling:** When errors are confined strictly to third-party declaration files, ng-matrix marks the strict check as passed with an informational warning finding (`"library typings have errors with skipLibCheck: false"`). It does not fail the version or trigger an exit code 1.
 - **Fix:** Keep your third-party typing dependencies aligned with target TypeScript versions.
 
-### 4. Bare Boolean Attributes in Strict Templates
-- **Symptom:** Strict templates check fails with: `Type 'string' is not assignable to type 'boolean'` on `<div myDirective>`.
-- **Cause:** Users often write boolean attributes without values (`<comp isOpen>`), which HTML treats as `isOpen=""`.
-- **Fix:** In Angular 16.1+, add the `booleanAttribute` transform to your input:
-  ```ts
-  @Input({ transform: booleanAttribute }) isOpen = false;
-  ```
-
-### 5. Disk Full (ENOSPC)
+### 4. Disk Full (ENOSPC)
 - **Symptom:** Exit code 2 with `ENOSPC: no space left on device`.
 - **Fix:** Clear temporary build folders and caches using `ng-matrix cache clean`, or point `NG_MATRIX_CACHE` and `TMPDIR`/`TEMP` to a drive with sufficient disk space.
+
+> **Tip for library authors:** If your library accepts bare attributes like `<comp myFlag>`, give boolean inputs `@Input({ transform: booleanAttribute })` so consumers can write bare attributes under strict template checking (ng-matrix does not check this).
 
 ---
 
@@ -390,7 +382,7 @@ Options
 
 - **Supported Workspaces:** Angular CLI workspaces and standalone `ng-packagr` libraries.
 - **Node.js:** Node 24.15 or later is recommended to cover all Angular majors from 17 through 22.
-- **Roadmap (v0.2):**
+- **Planned:**
   - `ng-matrix ci github`: Generates dedicated GitHub Actions workflows with matrix parallelism.
   - First-class Nx workspace discovery and integration.
   - Dedicated SSR (Server-Side Rendering) and `with-zone.js` validation columns.
