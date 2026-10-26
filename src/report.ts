@@ -50,6 +50,15 @@ export function findings(
       } else {
         raw.push({ level: 'warning', majors: [m], key: `fail:${name}:${why}`, text: `${CHECK_LABELS[name]}: ${why}` });
       }
+      if (version.skippedInstallScripts?.length) {
+        const list = version.skippedInstallScripts.join(', ');
+        raw.push({
+          level: 'note',
+          majors: [m],
+          key: `scripts:${list}`,
+          text: `Install scripts didn't run for ${list} (the default). If the failure comes from one of them, check again with --allow-scripts.`,
+        });
+      }
     } else if (version.claimed === false) {
       const ranges = version.peerMisses.map((miss) => `${miss.name} "${miss.range}"`).join(', ');
       raw.push({

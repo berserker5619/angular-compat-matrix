@@ -4,7 +4,7 @@ import semver from 'semver';
 import { type PackageManager, readJson, writeJson } from './app.ts';
 import { environmentProblem, errorLines, exec, npm, quietEnv, stepTimeout } from './exec.ts';
 import type { PeerPlan } from './peers.ts';
-import { npmInstall, pnpmBuildSettings } from './scripts.ts';
+import { npmInstall, pnpmBuildSettings, skippedByNpm, skippedByPnpm } from './scripts.ts';
 import { ensureTool, PNPM_VERSION, pnpmEntry } from './tools.ts';
 
 export interface InstallRequest {
@@ -28,6 +28,8 @@ export interface InstallOutcome {
   ignored: string[];
   /** The machine's fault (a timeout, a full disk, the network), not the package's. */
   environment?: string;
+  /** Packages whose install scripts didn't run (the default; --allow-scripts runs them). */
+  skippedScripts: string[];
 }
 
 export function addDependencies(appDir: string, deps: Record<string, string>, extra: Record<string, unknown> = {}): void {
@@ -42,7 +44,7 @@ export async function installLibrary(request: InstallRequest): Promise<InstallOu
   const tgz = basename(request.tarball);
   copyFileSync(request.tarball, join(request.appDir, tgz));
   const deps = { ...request.plan.installs, [request.libraryName]: `file:${tgz}` };
-  return request.pm === 'npm' ? installWithNpm(request, deps) : installWithPnpm(request, deps, tgz);
+  return request.pm === 'npm' ? installWithNpm(request, deps) : installWithPnpm(request, deps);
 }
 
 /**
@@ -54,12 +56,20 @@ async function installWithNpm(request: InstallRequest, deps: Record<string, stri
   const args = ['install', '--legacy-peer-deps', '--no-audit', '--no-fund'];
   if (request.offline) args.push('--offline');
   const result = await npmInstall(args, { cwd: request.appDir, timeoutMs: stepTimeout() }, request.allowScripts);
+  const skippedScripts = request.allowScripts ? [] : skippedByNpm(request.appDir);
   if (result.code !== 0) {
-    return { pass: false, message: 'npm install failed.', errorLines: errorLines(result.output), ignored: [], environment: environmentProblem(result) };
+    return {
+      pass: false,
+      message: 'npm install failed.',
+      errorLines: errorLines(result.output),
+      ignored: [],
+      environment: environmentProblem(result),
+      skippedScripts,
+    };
   }
   const ls = await npm(['ls', '--all'], { cwd: request.appDir });
   const problems = parseNpmLs(ls.output);
-  return judgeProblems(request, problems);
+  return { ...judgeProblems(request, problems), skippedScripts };
 }
 
 export interface PeerProblem {
@@ -90,7 +100,7 @@ export function parseNpmLs(output: string): PeerProblem[] {
   return problems;
 }
 
-function judgeProblems(request: InstallRequest, problems: PeerProblem[]): InstallOutcome {
+function judgeProblems(request: InstallRequest, problems: PeerProblem[]): Omit<InstallOutcome, 'skippedScripts'> {
   // Only conflicts about the package under test and the peers installed for it count;
   // anything else in the tree is the generated app's own business.
   const ours = new Set([request.libraryName, ...Object.keys(request.plan.installs)]);
@@ -119,10 +129,10 @@ function judgeProblems(request: InstallRequest, problems: PeerProblem[]): Instal
 
 /**
  * pnpm only warns about peers by default, so strictPeerDependencies is on, with allowedVersions
- * for the one expected conflict. strictDepBuilds is off: otherwise pnpm 12 fails every install
- * on Angular's own esbuild, lmdb and @parcel/watcher scripts. The library's own scripts may run.
+ * for the one expected conflict. strictDepBuilds is off, so a package whose install script isn't
+ * allowed is skipped rather than failing the install; only the toolchain's builds are allowed.
  */
-async function installWithPnpm(request: InstallRequest, deps: Record<string, string>, tgz: string): Promise<InstallOutcome> {
+async function installWithPnpm(request: InstallRequest, deps: Record<string, string>): Promise<InstallOutcome> {
   addDependencies(request.appDir, deps, { packageManager: `pnpm@${PNPM_VERSION}` });
   const allowed: Record<string, string> = {};
   if (request.plan.claimed === false) {
@@ -137,6 +147,7 @@ async function installWithPnpm(request: InstallRequest, deps: Record<string, str
   if (request.offline) args.push('--offline');
   const result = await exec(process.execPath, args, { cwd: request.appDir, env: quietEnv(), timeoutMs: stepTimeout() });
   const ignored = Object.entries(allowed).map(([key, major]) => `${key} allowed at ${major}.x`);
+  const skippedScripts = request.allowScripts ? [] : skippedByPnpm(result.output);
   if (result.code !== 0) {
     const peer = /ERR_PNPM_PEER_DEP_ISSUES|unmet peer|Issues with peer dependencies/i.test(result.output);
     return {
@@ -145,6 +156,7 @@ async function installWithPnpm(request: InstallRequest, deps: Record<string, str
       errorLines: errorLines(result.output),
       ignored,
       environment: environmentProblem(result),
+      skippedScripts,
     };
   }
   return {
@@ -152,6 +164,7 @@ async function installWithPnpm(request: InstallRequest, deps: Record<string, str
     message: ignored.length ? `Installed; allowed the expected conflict: ${ignored.join('; ')}.` : 'Installed.',
     errorLines: [],
     ignored,
+    skippedScripts,
   };
 }
 

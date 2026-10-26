@@ -82,6 +82,18 @@ describe('findings', () => {
   it('writes major lists as ranges', () => {
     assert.equal(majorsText([18, 19, 20, 22]), '18–20, 22');
   });
+
+  it('points a failing version with skipped install scripts at --allow-scripts, and only a failing one', () => {
+    const skipped = { skippedInstallScripts: ['core-js@3.46.0'] };
+    const list = findings(
+      [{ ...version(21, true, { aot: result('fail', 'x') }), ...skipped }, { ...version(22, true, {}), ...skipped }],
+      { peerDependencies: { '@angular/core': '^21.0.0 || ^22.0.0' } },
+    );
+    const notes = list.filter((f) => /--allow-scripts/.test(f.text));
+    assert.equal(notes.length, 1);
+    assert.deepEqual(notes[0].majors, [21]);
+    assert.match(notes[0].text, /core-js@3\.46\.0/);
+  });
 });
 
 describe('rendering', () => {

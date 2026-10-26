@@ -130,6 +130,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
       offline: ctx.offline,
       allowScripts: ctx.allowScripts,
     });
+    if (installed.skippedScripts.length) report.skippedInstallScripts = installed.skippedScripts;
     if (installed.environment) return notChecked('The install', installed.environment, installed.errorLines);
     checks.install = result(installed.pass ? 'pass' : 'fail', installed.message, {
       errorLines: installed.errorLines,

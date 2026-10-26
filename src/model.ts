@@ -40,6 +40,8 @@ export interface VersionReport {
   checks: Record<CheckName, CheckResult>;
   /** ng-matrix itself couldn't set this version up (ng new failed, say): not the package's fault. */
   setupError?: string;
+  /** Packages in the app whose install scripts didn't run (the default; --allow-scripts runs them). */
+  skippedInstallScripts?: string[];
   durationMs: number;
   appDir?: string;
 }
