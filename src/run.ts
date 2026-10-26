@@ -198,16 +198,15 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
     const strict = await ngBuild(appDir, project.tsConfig, { strictTemplates: true, skipLibCheck: false }, files);
     if (strict.environment) return notChecked('The strict build', strict.environment, strict.errorLines);
     const dtsOnly = !strict.pass && isDtsOnlyFailure(strict.errorLines);
+    const dtsHint = strict.hint ?? (dtsOnly ? 'library typings have errors with skipLibCheck: false' : undefined);
     checks.strict = result(
       strict.pass ? 'pass' : 'fail',
       strict.pass
         ? 'Builds with strictTemplates: true and skipLibCheck: false.'
-        : dtsOnly
-          ? 'library typings have errors with skipLibCheck: false'
-          : 'Fails with strictTemplates: true and skipLibCheck: false.',
+        : dtsHint ?? 'Fails with strictTemplates: true and skipLibCheck: false.',
       {
         errorLines: strict.errorLines,
-        hint: dtsOnly ? 'library typings have errors with skipLibCheck: false' : strict.hint,
+        hint: dtsHint,
         durationMs: strict.durationMs,
       },
     );
