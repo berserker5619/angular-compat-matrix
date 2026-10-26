@@ -207,7 +207,7 @@ export function renderMarkdown(report: Report): string {
   const lines = [
     '## Angular compatibility',
     '',
-    `Checked on ${date} for \`${report.library.name}@${report.library.version}\`${compiled}, by installing the packed package into a fresh app of each version with ${report.packageManager} and building it ([ng-matrix](https://github.com/berserker5619/ng-matrix)).`,
+    `Checked on ${date} for \`${report.library.name}@${report.library.version}\`${compiled}, by installing the packed package into a fresh app of each version with ${report.packageManager} and building it ([angular-compat-matrix](https://github.com/berserker5619/angular-compat-matrix)).`,
     '',
     `| Angular | ${cols.map((c) => CHECK_LABELS[c][0].toUpperCase() + CHECK_LABELS[c].slice(1)).join(' | ')} |`,
     `| :-- | ${cols.map(() => ':-:').join(' | ')} |`,

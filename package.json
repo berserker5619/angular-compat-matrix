@@ -1,5 +1,5 @@
 {
-  "name": "ng-matrix",
+  "name": "angular-compat-matrix",
   "version": "0.1.0",
   "description": "Find out which Angular versions your published library really works with: it installs the packed package into a fresh app for each Angular major, builds it, and reports a matrix.",
   "keywords": [
@@ -12,14 +12,15 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/berserker5619/ng-matrix.git"
+    "url": "git+https://github.com/berserker5619/angular-compat-matrix.git"
   },
-  "bugs": "https://github.com/berserker5619/ng-matrix/issues",
-  "homepage": "https://github.com/berserker5619/ng-matrix#readme",
+  "bugs": "https://github.com/berserker5619/angular-compat-matrix/issues",
+  "homepage": "https://github.com/berserker5619/angular-compat-matrix#readme",
   "license": "MIT",
   "author": "Nizamudeen S",
   "type": "module",
   "bin": {
+    "angular-compat-matrix": "dist/cli.js",
     "ng-matrix": "dist/cli.js"
   },
   "files": [

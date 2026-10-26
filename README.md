@@ -1,11 +1,13 @@
-# ng-matrix
+# angular-compat-matrix
 
 Which Angular versions does your published library really work with?
+
+Run it with `npx angular-compat-matrix`, or install the package and run `ng-matrix`: both names start the same command.
 
 ng-matrix builds and packs your Angular library, installs the tarball the way a user would into a fresh app for each Angular major (made with that major's own CLI), builds it, and reports a matrix. It tests the package your users get, not the source you see.
 
 ```
-$ npx ng-matrix
+$ npx angular-compat-matrix
 
 my-dropdown@3.0.0 (compiled with Angular 21.2.0; highest minVersion 20.0.0)
 
@@ -28,17 +30,17 @@ Angular 22      ✗          ✓        ✓         ✓           ✓
 Run it in your library's workspace: an Angular CLI workspace with a library project, or a folder with `ng-package.json`.
 
 ```sh
-npx ng-matrix                        # supported majors plus every major your peer range claims
-npx ng-matrix --versions 18-22       # an explicit range (or 22, or 20,22)
-npx ng-matrix --project my-lib       # one library in a workspace with several
-npx ng-matrix --consumer ./example   # build your own example app instead of a generated one
-npx ng-matrix --tests                # also run your library's tests on each version
-npx ng-matrix --pm pnpm              # npm (default) or pnpm
-npx ng-matrix --format markdown      # a table for your README; also json
-npx ng-matrix --package some-lib@3   # check a published package instead of building
+npx angular-compat-matrix                        # supported majors plus every major your peer range claims
+npx angular-compat-matrix --versions 18-22       # an explicit range (or 22, or 20,22)
+npx angular-compat-matrix --project my-lib       # one library in a workspace with several
+npx angular-compat-matrix --consumer ./example   # build your own example app instead of a generated one
+npx angular-compat-matrix --tests                # also run your library's tests on each version
+npx angular-compat-matrix --pm pnpm              # npm (default) or pnpm
+npx angular-compat-matrix --format markdown      # a table for your README; also json
+npx angular-compat-matrix --package some-lib@3   # check a published package instead of building
 ```
 
-`npx ng-matrix --help` lists every option.
+`npx angular-compat-matrix --help` lists every option.
 
 **Exit code:** 1 when a version inside your peer range fails, so CI goes red only for broken promises. A version outside the range that fails is a note. 2 means ng-matrix couldn't check a version at all.
 
@@ -86,7 +88,7 @@ jobs:
         with:
           node-version: 24
       - run: npm ci
-      - run: npx ng-matrix --format markdown >> "$GITHUB_STEP_SUMMARY"
+      - run: npx angular-compat-matrix --format markdown >> "$GITHUB_STEP_SUMMARY"
 ```
 
 (`ng-matrix ci github`, which writes a workflow with one job per Angular version, is coming in v0.2.)

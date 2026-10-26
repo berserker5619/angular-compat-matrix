@@ -30,7 +30,8 @@ It builds and packs your library, installs the tarball into a fresh app for each
 major (made with that major's own CLI), builds it, and reports a matrix.
 
 Usage
-  npx ng-matrix [options]
+  npx angular-compat-matrix [options]
+  ng-matrix [options]                  (once installed)
 
 Options
   --versions <list>      Angular majors to check: 22, 18-22, 20,22. Default: the supported
@@ -203,7 +204,7 @@ export async function main(argv: string[]): Promise<number> {
     );
 
     const report: Report = {
-      tool: { name: 'ng-matrix', version: toolVersion() },
+      tool: { name: 'angular-compat-matrix', version: toolVersion() },
       checkedAt: now.toISOString(),
       library: {
         name: library.manifest.name,

@@ -70,7 +70,7 @@ A third false failure turned up in the new pnpm fixture rather than a library: w
 ## How to reproduce
 
 ```sh
-npx ng-matrix --package ngx-toastr@20.0.5 --versions 20-22
+npx angular-compat-matrix --package ngx-toastr@20.0.5 --versions 20-22
 ```
 
 Results depend on the registry on the day: the newest Angular patch of each major, and the newest version of each peer that accepts it.

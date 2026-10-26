@@ -7,14 +7,14 @@
  *   prerelease or absent, so a plain `npm install` never gets a release candidate once a stable
  *   version exists.
  * - Stable: published under `latest`; `next` is moved up when it points at an older version, so
- *   `npm install ng-matrix@next` never installs something older than latest.
+ *   `npm install angular-compat-matrix@next` never installs something older than latest.
  * - A version already on the registry is skipped.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-const NAME = 'ng-matrix';
+const NAME = 'angular-compat-matrix';
 
 /** Which dist-tag a version is published under. */
 export function publishTag(version) {

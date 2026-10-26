@@ -76,12 +76,12 @@ jobs:
       - name: Package already exists on registry
         if: ${{ github.event_name == 'push' || github.event.inputs.dry_run != 'true' }}
         run: |
-          if OUT=$(npm view ng-matrix version 2>&1); then
-            echo "ng-matrix is on the registry at $OUT"
+          if OUT=$(npm view angular-compat-matrix version 2>&1); then
+            echo "angular-compat-matrix is on the registry at $OUT"
           else
             case "$OUT" in
               *E404*)
-                echo "::error::First publish needed for ng-matrix: publish it by hand, then add this workflow as its trusted publisher"
+                echo "::error::First publish needed for angular-compat-matrix: publish it by hand, then add this workflow as its trusted publisher"
                 exit 1
                 ;;
               *)
@@ -93,7 +93,7 @@ jobs:
           fi
 
       # Prereleases (0.2.0-rc.1) go to next; stable versions go to latest and move next up.
-      - name: Publish ng-matrix
+      - name: Publish angular-compat-matrix
         if: ${{ github.event_name == 'push' || github.event.inputs.dry_run != 'true' }}
         run: node scripts/release-publish.mjs
 

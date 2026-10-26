@@ -32,7 +32,7 @@ test('prereleases publish to next, stable versions to latest', () => {
 test('a release candidate moves latest only while there is no stable version', () => {
   assert.deepEqual(run('1.0.0-rc.2', { versions: ['1.0.0-rc.1'], tags: { latest: '1.0.0-rc.1', next: '1.0.0-rc.1' } }), [
     PUBLISH('next'),
-    'dist-tag add ng-matrix@1.0.0-rc.2 latest',
+    'dist-tag add angular-compat-matrix@1.0.0-rc.2 latest',
   ]);
   assert.deepEqual(run('1.1.0-rc.1', { versions: ['1.0.0'], tags: { latest: '1.0.0' } }), [PUBLISH('next')]);
 });
@@ -40,7 +40,7 @@ test('a release candidate moves latest only while there is no stable version', (
 test('a stable version moves next up when next is older', () => {
   assert.deepEqual(run('1.0.0', { versions: ['1.0.0-rc.2'], tags: { latest: '1.0.0-rc.2', next: '1.0.0-rc.2' } }), [
     PUBLISH('latest'),
-    'dist-tag add ng-matrix@1.0.0 next',
+    'dist-tag add angular-compat-matrix@1.0.0 next',
   ]);
   assert.deepEqual(run('1.0.1', { versions: ['1.0.0', '1.1.0-rc.1'], tags: { latest: '1.0.0', next: '1.1.0-rc.1' } }), [PUBLISH('latest')]);
 });
