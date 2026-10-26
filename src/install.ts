@@ -2,7 +2,7 @@ import { copyFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import semver from 'semver';
 import { type PackageManager, readJson, writeJson } from './app.ts';
-import { errorLines, exec, npm, quietEnv } from './exec.ts';
+import { environmentProblem, errorLines, exec, npm, quietEnv, stepTimeout } from './exec.ts';
 import type { PeerPlan } from './peers.ts';
 import { ensureTool, PNPM_VERSION, pnpmEntry } from './tools.ts';
 
@@ -23,6 +23,8 @@ export interface InstallOutcome {
   errorLines: string[];
   /** Peer conflicts that were expected (the version is outside the claimed range) and ignored. */
   ignored: string[];
+  /** The machine's fault (a timeout, a full disk, the network), not the package's. */
+  environment?: string;
 }
 
 export function addDependencies(appDir: string, deps: Record<string, string>, extra: Record<string, unknown> = {}): void {
@@ -48,9 +50,9 @@ async function installWithNpm(request: InstallRequest, deps: Record<string, stri
   addDependencies(request.appDir, deps);
   const args = ['install', '--legacy-peer-deps', '--no-audit', '--no-fund'];
   if (request.offline) args.push('--offline');
-  const result = await npm(args, { cwd: request.appDir, timeoutMs: 15 * 60_000 });
+  const result = await npm(args, { cwd: request.appDir, timeoutMs: stepTimeout() });
   if (result.code !== 0) {
-    return { pass: false, message: 'npm install failed.', errorLines: errorLines(result.output), ignored: [] };
+    return { pass: false, message: 'npm install failed.', errorLines: errorLines(result.output), ignored: [], environment: environmentProblem(result) };
   }
   const ls = await npm(['ls', '--all'], { cwd: request.appDir });
   const problems = parseNpmLs(ls.output);
@@ -130,7 +132,7 @@ async function installWithPnpm(request: InstallRequest, deps: Record<string, str
   const pnpm = await ensureTool(request.cacheDir, 'pnpm', PNPM_VERSION, request.offline);
   const args = [pnpmEntry(pnpm), 'install', '--no-frozen-lockfile'];
   if (request.offline) args.push('--offline');
-  const result = await exec(process.execPath, args, { cwd: request.appDir, env: quietEnv(), timeoutMs: 15 * 60_000 });
+  const result = await exec(process.execPath, args, { cwd: request.appDir, env: quietEnv(), timeoutMs: stepTimeout() });
   const ignored = Object.entries(allowed).map(([key, major]) => `${key} allowed at ${major}.x`);
   if (result.code !== 0) {
     const peer = /ERR_PNPM_PEER_DEP_ISSUES|unmet peer|Issues with peer dependencies/i.test(result.output);
@@ -139,6 +141,7 @@ async function installWithPnpm(request: InstallRequest, deps: Record<string, str
       message: peer ? 'Peer conflict (pnpm strict-peer-dependencies).' : 'pnpm install failed.',
       errorLines: errorLines(result.output),
       ignored,
+      environment: environmentProblem(result),
     };
   }
   return {

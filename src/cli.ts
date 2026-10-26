@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync } from 'node:fs';
+import { cleanUpOnInterrupt, createWorkDir, removeDir, sweepCache, sweepWorkDirs } from './cleanup.ts';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -9,9 +9,10 @@ import type { PackageManager } from './app.ts';
 import { LibraryError, prepareLibrary } from './library.ts';
 import type { Report } from './model.ts';
 import { angularImports, scanPackage, summarize } from './partial.ts';
-import { Registry } from './registry.ts';
+import { Registry, RegistryError } from './registry.ts';
 import { exitCode, findings, renderJson, renderMarkdown, renderTerminal } from './report.ts';
 import { defaultConcurrency, runAll } from './run.ts';
+import { setStepTimeout } from './exec.ts';
 import { defaultCacheDir } from './tools.ts';
 import {
   type AngularMajor,
@@ -49,6 +50,7 @@ Options
   --tarball <file>       Check this packed .tgz instead of building
   --package <spec>       Check a published package, e.g. some-lib@3.1.0
   --concurrency <n>      Versions checked at once (default: as many as free memory allows)
+  --step-timeout <min>   Longest any one step (ng new, install, build, tests) may take (default: 20)
   --keep                 Keep the temporary apps, for debugging
   --offline              Use only cached registry answers and packages
   --cwd <dir>            The library's workspace (default: the current folder)
@@ -81,6 +83,8 @@ function fail(message: string, lines: string[] = []): never {
 function explain(error: unknown): number {
   if (error instanceof Stop || error instanceof LibraryError) {
     process.stderr.write(`ng-matrix: ${error.message}\n${error.lines.map((l) => `  ${l}\n`).join('')}`);
+  } else if (error instanceof RegistryError) {
+    process.stderr.write(`ng-matrix: ${error.message}\n`);
   } else if (String((error as { code?: string }).code).startsWith('ERR_PARSE_ARGS')) {
     process.stderr.write(`ng-matrix: ${(error as Error).message}. See --help.\n`);
   } else {
@@ -107,6 +111,7 @@ export async function main(argv: string[]): Promise<number> {
       tarball: { type: 'string' },
       package: { type: 'string' },
       concurrency: { type: 'string' },
+      'step-timeout': { type: 'string' },
       keep: { type: 'boolean', default: false },
       offline: { type: 'boolean', default: false },
       cwd: { type: 'string' },
@@ -132,6 +137,11 @@ export async function main(argv: string[]): Promise<number> {
   const pm = (values.pm ?? (existsSync(join(cwd, 'pnpm-lock.yaml')) ? 'pnpm' : 'npm')) as PackageManager;
   if (pm !== 'npm' && pm !== 'pnpm') fail(`--pm must be npm or pnpm (yarn and bun come later), not "${pm}".`);
   const consumer = values.consumer ? resolve(cwd, values.consumer) : undefined;
+  if (values['step-timeout'] !== undefined) {
+    const minutes = Number(values['step-timeout']);
+    if (!(minutes > 0)) fail(`--step-timeout must be a number of minutes above 0, not "${values['step-timeout']}".`);
+    setStepTimeout(minutes * 60_000);
+  }
   const log = (line: string) => process.stderr.write(`[ng-matrix] ${line}\n`);
 
   const cacheDir = defaultCacheDir();
@@ -140,7 +150,11 @@ export async function main(argv: string[]): Promise<number> {
     offline: values.offline,
     recordedDir: process.env.NG_MATRIX_RECORDED_REGISTRY,
   });
-  const workDir = mkdtempSync(join(tmpdir(), 'ng-matrix-'));
+  // Leftovers from runs that were killed before they could clean up.
+  sweepWorkDirs();
+  sweepCache(cacheDir);
+  const workDir = createWorkDir();
+  const stopListening = cleanUpOnInterrupt(workDir, values.keep, log);
   if (values.keep) log(`Working in ${workDir} (--keep)`);
 
   try {
@@ -227,7 +241,8 @@ export async function main(argv: string[]): Promise<number> {
   } catch (error) {
     return explain(error);
   } finally {
-    if (!values.keep) rmSync(workDir, { recursive: true, force: true, maxRetries: 3 });
+    stopListening();
+    if (!values.keep) removeDir(workDir);
   }
 }
 

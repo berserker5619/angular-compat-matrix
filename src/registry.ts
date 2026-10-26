@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export interface VersionMeta {
@@ -25,6 +25,8 @@ export interface RegistryOptions {
   recordedDir?: string;
   registryUrl?: string;
   maxAgeMs?: number;
+  /** Per request; each request is tried twice. */
+  timeoutMs?: number;
 }
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -57,9 +59,7 @@ export class Registry {
     }
     const dir = join(this.options.cacheDir, 'registry');
     const path = join(dir, file);
-    const cached = existsSync(path)
-      ? (JSON.parse(readFileSync(path, 'utf8')) as { fetchedAt: number; packument: Packument })
-      : undefined;
+    const cached = readCached(path);
     const maxAge = this.options.maxAgeMs ?? DAY;
     if (cached && (this.options.offline || Date.now() - cached.fetchedAt < maxAge)) return cached.packument;
     if (this.options.offline) throw new Error(`--offline: ${name} isn't in the registry cache yet. Run once online first.`);
@@ -74,23 +74,70 @@ export class Registry {
     const accept = FULL_DOCUMENT.has(name)
       ? 'application/json'
       : 'application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8';
-    let response: Response;
-    try {
-      response = await fetch(url, { headers: { accept } });
-    } catch (error) {
-      if (cached) return cached.packument;
-      throw new Error(`Couldn't reach the npm registry for ${name}: ${(error as Error).message}`);
+    const timeoutMs = this.options.timeoutMs ?? 30_000;
+    let packument: Packument | undefined;
+    let problem = '';
+    // Two tries: one dropped connection shouldn't end a run that takes minutes.
+    for (let attempt = 1; attempt <= 2 && !packument; attempt++) {
+      try {
+        const response = await fetch(url, { headers: { accept }, signal: AbortSignal.timeout(timeoutMs) });
+        if (response.status === 404) throw new RegistryError(`${name} isn't on the npm registry (${base}).`);
+        if (!response.ok) {
+          problem = `it answered ${response.status} ${response.statusText}`;
+          continue;
+        }
+        packument = trim((await response.json()) as Packument);
+      } catch (error) {
+        if (error instanceof RegistryError) throw error;
+        problem = describeFetchError(error as Error, timeoutMs);
+      }
     }
-    if (!response.ok) {
+    if (!packument) {
       if (cached) return cached.packument;
-      throw new Error(`The npm registry answered ${response.status} for ${name}`);
+      throw new RegistryError(`Couldn't get ${name} from the npm registry (${base}): ${problem}.`);
     }
-    const packument = trim((await response.json()) as Packument);
+    writeCached(dir, path, packument);
+    return packument;
+  }
+}
+
+export class RegistryError extends Error {}
+
+function describeFetchError(error: Error, timeoutMs: number): string {
+  if (error.name === 'TimeoutError' || error.name === 'AbortError') return `no answer within ${timeoutMs / 1000} s`;
+  const cause = (error as Error & { cause?: { code?: string; message?: string } }).cause;
+  const code = cause?.code;
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'the host name could not be resolved (are you offline?)';
+  if (code === 'ECONNREFUSED') return 'the connection was refused';
+  if (code === 'ECONNRESET') return 'the connection was reset';
+  return cause?.message ?? error.message;
+}
+
+/** A cache entry, or nothing when it's missing or unreadable (a crashed write, a full disk): it's refetched. */
+function readCached(path: string): { fetchedAt: number; packument: Packument } | undefined {
+  if (!existsSync(path)) return undefined;
+  try {
+    const entry = JSON.parse(readFileSync(path, 'utf8')) as { fetchedAt?: unknown; packument?: Packument };
+    if (typeof entry.fetchedAt === 'number' && entry.packument && typeof entry.packument.versions === 'object') {
+      return entry as { fetchedAt: number; packument: Packument };
+    }
+  } catch {
+    // fall through
+  }
+  rmSync(path, { force: true });
+  return undefined;
+}
+
+/** Writes through a temporary file, so a crash or a full disk never leaves a half-written entry. */
+function writeCached(dir: string, path: string, packument: Packument): void {
+  const tmp = `${path}.${process.pid}.tmp`;
+  try {
     mkdirSync(dir, { recursive: true });
-    const tmp = `${path}.${process.pid}.tmp`;
     writeFileSync(tmp, JSON.stringify({ fetchedAt: Date.now(), packument }));
     renameSync(tmp, path);
-    return packument;
+  } catch {
+    // Caching is an optimisation; the run goes on without it.
+    rmSync(tmp, { force: true });
   }
 }
 

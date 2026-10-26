@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node
 import { createRequire } from 'node:module';
 import { basename, dirname, join, resolve } from 'node:path';
 import * as tar from 'tar';
-import { errorLines, exec, npm, quietEnv } from './exec.ts';
+import { environmentProblem, errorLines, exec, npm, quietEnv } from './exec.ts';
 import type { LibraryManifest } from './peers.ts';
 
 export interface LibraryOptions {
@@ -162,16 +162,29 @@ export function fullCompilationEvidence(dir: string): string | undefined {
 
 async function pack(source: string, into: string): Promise<string> {
   const result = await npm(['pack', source, '--pack-destination', into, '--json', '--ignore-scripts'], { cwd: into });
-  if (result.code !== 0) throw new LibraryError(`npm pack ${source} failed.`, errorLines(result.output));
+  if (result.code !== 0) throw new LibraryError(packFailure(source, result.output), errorLines(result.output));
   const json = result.output.slice(result.output.indexOf('['));
   const [info] = JSON.parse(json) as Array<{ filename: string }>;
   // Scoped packages: npm reports "@scope/name-1.0.0.tgz" but writes "scope-name-1.0.0.tgz".
   return join(into, info.filename.replace(/^@/, '').replace('/', '-'));
 }
 
+/** What went wrong with `npm pack <spec>`, in words: most often the name or the version doesn't exist. */
+export function packFailure(spec: string, output: string): string {
+  if (/\bE404\b|404 Not Found/.test(output)) return `There's no package ${spec.replace(/(.)@[^@]*$/, '$1')} on the npm registry.`;
+  if (/\bETARGET\b|No matching version/.test(output)) return `${spec} doesn't match any published version.`;
+  const why = environmentProblem({ output, timedOut: false });
+  if (why) return `Couldn't download ${spec}: ${why}.`;
+  return `npm pack ${spec} failed.`;
+}
+
 export async function extract(tarball: string, into: string): Promise<string> {
   mkdirSync(into, { recursive: true });
-  await tar.x({ file: tarball, cwd: into });
+  try {
+    await tar.x({ file: tarball, cwd: into, strict: true });
+  } catch (error) {
+    throw new LibraryError(`${tarball} isn't a package tarball (.tgz): ${(error as Error).message}`);
+  }
   const dir = join(into, 'package');
   if (!existsSync(join(dir, 'package.json'))) throw new LibraryError(`${tarball} has no package/package.json.`);
   return dir;

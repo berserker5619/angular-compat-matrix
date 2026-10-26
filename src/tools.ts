@@ -31,7 +31,9 @@ export function ensureTool(cacheDir: string, name: string, version: string, offl
 async function install(cacheDir: string, name: string, version: string, offline: boolean): Promise<string> {
   const home = join(cacheDir, 'tools', `${name.replace('/', '+')}@${version}`);
   const pkgDir = join(home, 'node_modules', ...name.split('/'));
-  if (existsSync(join(pkgDir, 'package.json'))) return pkgDir;
+  if (isComplete(pkgDir)) return pkgDir;
+  // A damaged entry (a truncated package.json, a missing bin) is downloaded again.
+  if (existsSync(home)) rmSync(home, { recursive: true, force: true, maxRetries: 5 });
   const tmp = `${home}.${process.pid}.tmp`;
   rmSync(tmp, { recursive: true, force: true });
   mkdirSync(tmp, { recursive: true });
@@ -50,6 +52,17 @@ async function install(cacheDir: string, name: string, version: string, offline:
     rmSync(tmp, { recursive: true, force: true });
   }
   return pkgDir;
+}
+
+/** A cached tool is usable when its package.json parses and every bin it declares is there. */
+export function isComplete(pkgDir: string): boolean {
+  try {
+    const manifest = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')) as { bin?: string | Record<string, string> };
+    const bins = typeof manifest.bin === 'string' ? [manifest.bin] : Object.values(manifest.bin ?? {});
+    return bins.every((bin) => existsSync(join(pkgDir, bin)));
+  } catch {
+    return false;
+  }
 }
 
 export function binOf(pkgDir: string, bin: string): string {

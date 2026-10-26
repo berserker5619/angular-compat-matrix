@@ -1,13 +1,15 @@
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { type BuildMode, writeTsconfig } from './app.ts';
-import { errorLines, exec, quietEnv } from './exec.ts';
+import { environmentProblem, errorLines, exec, quietEnv, stepTimeout } from './exec.ts';
 
 export interface BuildOutcome {
   pass: boolean;
   errorLines: string[];
   hint?: string;
   durationMs: number;
+  /** The machine's fault (a timeout, a full disk), not the package's. */
+  environment?: string;
 }
 
 export async function ngBuild(appDir: string, baseTsConfig: string, mode: BuildMode, files?: string[]): Promise<BuildOutcome> {
@@ -18,11 +20,16 @@ export async function ngBuild(appDir: string, baseTsConfig: string, mode: BuildM
   const result = await exec(process.execPath, [ng, 'build', '--configuration', 'production'], {
     cwd: appDir,
     env: quietEnv({ CI: '1' }),
-    timeoutMs: 20 * 60_000,
+    timeoutMs: stepTimeout(),
   });
   if (result.code === 0) return { pass: true, errorLines: [], durationMs: result.durationMs };
-  const lines = result.timedOut ? ['The build timed out after 20 minutes.'] : errorLines(result.output);
-  return { pass: false, errorLines: lines, hint: hintFor(result.output), durationMs: result.durationMs };
+  return {
+    pass: false,
+    errorLines: errorLines(result.output),
+    hint: hintFor(result.output),
+    durationMs: result.durationMs,
+    environment: environmentProblem(result),
+  };
 }
 
 /** Plain-language explanations for build failures whose messages don't say what's wrong. */

@@ -81,6 +81,12 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
     ctx.log(`${tag}: done in ${Math.round(report.durationMs / 1000)} s`);
     return report;
   };
+  // A timeout, a full disk or a network error says nothing about the package: this version
+  // wasn't checked (exit 2), rather than failing a check.
+  const notChecked = (step: string, why: string, lines: string[]) => {
+    report.setupError = [`${step} on ${tag}: ${why}.`, ...lines].join('\n');
+    return finish();
+  };
 
   // Peer range: reported, but never stops the other checks.
   const plan = await planPeers(ctx.library.manifest, angular.version, ctx.registry);
@@ -121,6 +127,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
       cacheDir: ctx.cacheDir,
       offline: ctx.offline,
     });
+    if (installed.environment) return notChecked('The install', installed.environment, installed.errorLines);
     checks.install = result(installed.pass ? 'pass' : 'fail', installed.message, {
       errorLines: installed.errorLines,
       durationMs: Date.now() - installStarted,
@@ -153,6 +160,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
 
     ctx.log(`${tag}: AOT build`);
     const aot = await ngBuild(appDir, project.tsConfig, { strictTemplates: false, skipLibCheck: true }, files);
+    if (aot.environment) return notChecked('The AOT build', aot.environment, aot.errorLines);
     checks.aot = result(aot.pass ? 'pass' : 'fail', aot.pass ? 'Production build succeeded.' : 'Production build failed.', {
       errorLines: aot.errorLines,
       hint: aot.hint,
@@ -162,6 +170,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
 
     ctx.log(`${tag}: strict build`);
     const strict = await ngBuild(appDir, project.tsConfig, { strictTemplates: true, skipLibCheck: false }, files);
+    if (strict.environment) return notChecked('The strict build', strict.environment, strict.errorLines);
     checks.strict = result(
       strict.pass ? 'pass' : 'fail',
       strict.pass ? 'Builds with strictTemplates: true and skipLibCheck: false.' : 'Fails with strictTemplates: true and skipLibCheck: false.',
@@ -185,6 +194,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
           cacheDir: ctx.cacheDir,
           offline: ctx.offline,
         });
+        if (tests.environment) return notChecked('The library tests', tests.environment, tests.errorLines);
         checks.tests = result(tests.pass ? 'pass' : 'fail', tests.message, {
           errorLines: tests.errorLines,
           durationMs: tests.durationMs,
