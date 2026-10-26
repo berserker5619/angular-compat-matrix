@@ -13,7 +13,7 @@ ng-matrix 0.1 was run with `--package` against the 50 most-downloaded Angular co
 
 | Library | Version | Compiled with | `@angular/core` peer | 20 | 21 | 22 | Run time (s) | Peak Disk (GB) |
 | :--- | :--- | :--- | :--- | :-: | :-: | :-: | :-: | :-: |
-| @coreui/angular | 5.7.37 | 22.2.3 | `^22.2.0` | ❌ install, not claimed | ❌ install, not claimed | ❌ strict types | 46 | 0.75 |
+| @coreui/angular | 5.7.37 | 22.2.3 | `^22.2.0` | ❌ install, not claimed | ❌ install, not claimed | ❌ skipLibCheck | 51 | 0.75 |
 | @fortawesome/angular-fontawesome | 5.1.0 | 22.0.5 | `^22.0.0` | ⚠️ works, not claimed | ⚠️ works, not claimed | ✅ | 47 | 0.68 |
 | @kolkov/ngx-gallery | 2.0.1 | 13.1.3 | `>=13.0.0 <14` | ⚠️ works, not claimed | ⚠️ works, not claimed | ❌ aot, not claimed | 60 | 0.68 |
 | @ng-select/ng-select | 24.2.1 | 22.2.0 | `^22.0.0` | ⚠️ works, not claimed | ⚠️ works, not claimed | ✅ | 51 | 0.69 |
@@ -33,10 +33,10 @@ ng-matrix 0.1 was run with `--package` against the 50 most-downloaded Angular co
 | angular-gridster2 | 22.0.0 | 22.0.3 | `^22.0.0` | ⚠️ works, not claimed | ⚠️ works, not claimed | ✅ | 60 | 0.68 |
 | angular-split | 20.0.0 | 19.0.5 | `>=19.0.0` | ✅ | ✅ | ✅ | 48 | 0.67 |
 | angular-svg-icon | 19.1.1 | 19.0.5 | `>=19.0.0` | ✅ | ✅ | ✅ | 51 | 0.67 |
-| ng-zorro-antd | 22.1.2 | 22.1.0 | `^22.0.0` | ❌ aot, not claimed | ❌ aot, not claimed | ❌ aot | 106 | 0.93 |
+| ng-zorro-antd | 22.1.2 | 22.1.0 | `^22.0.0` | ❌ aot, not claimed | ❌ aot, not claimed | ❌ skipLibCheck | 123 | 0.94 |
 | ng2-charts | 11.0.0 | 22.1.6 | `>=22.0.0` | ⚠️ works, not claimed | ⚠️ works, not claimed | ✅ | 61 | 0.74 |
 | ngx-autosize | 2.0.4 | 13.3.1 | `>12.0.0` | ✅ | ✅ | ✅ | 51 | 0.67 |
-| ngx-bootstrap | 22.0.0 | 22.0.2 | `^22.0.0` | ❌ aot, not claimed | ❌ strict types, not claimed | ❌ strict types | 53 | 0.68 |
+| ngx-bootstrap | 22.0.0 | 22.0.2 | `^22.0.0` | ❌ aot, not claimed | ⚠️ works, not claimed | ✅ | 70 | 0.69 |
 | ngx-clipboard | 16.0.0 | 15.1.4 | `>=13.0.0` | ✅ | ✅ | ✅ | 49 | 0.68 |
 | ngx-color | 10.1.0 | 19.1.3 | `>=19.0.0-0` | ✅ | ✅ | ✅ | 54 | 0.69 |
 | ngx-color-picker | 20.1.1 | 20.0.4 | `>=19.0.0` | ✅ | ✅ | ✅ | 51 | 0.67 |
@@ -46,7 +46,7 @@ ng-matrix 0.1 was run with `--package` against the 50 most-downloaded Angular co
 | ngx-drag-drop | 22.1.0 | 22.1.2 | `>=22.0.0` | ⚠️ works, not claimed | ⚠️ works, not claimed | ✅ | 51 | 0.68 |
 | ngx-echarts | 22.0.0 | 22.0.0 | `>=22.0.0` | ⚠️ works, not claimed | ⚠️ works, not claimed | ✅ | 61 | 0.86 |
 | ngx-filter-pipe | 3.0.1 | 17.3.8 | `>=5.0.0` | ✅ | ✅ | ✅ | 49 | 0.68 |
-| ngx-guided-tour | 2.0.1 | 13.3.0 | `>=13.0.0` | ❌ aot | ❌ aot | ❌ aot | 45 | 0.68 |
+| ngx-guided-tour | 2.0.1 | 13.3.0 | `>=13.0.0` | ✅ | ✅ | ✅ | 74 | 0.71 |
 | ngx-highlightjs | 14.0.1 | 19.2.14 | `>=19.0.0` | ✅ | ✅ | ✅ | 55 | 0.71 |
 | ngx-image-cropper | 9.1.7 | 17.3.12 | `>=17.3.0` | ✅ | ✅ | ✅ | 48 | 0.69 |
 | ngx-infinite-scroll | 22.0.0 | 22.0.5 | `>=22.0.0 <23.0.0` | ⚠️ works, not claimed | ⚠️ works, not claimed | ✅ | 62 | 0.67 |
@@ -62,7 +62,7 @@ ng-matrix 0.1 was run with `--package` against the 50 most-downloaded Angular co
 | ngx-socket-io | 4.11.1 | 22.0.1 | `^22.0.0` | ⚠️ works, not claimed | ⚠️ works, not claimed | ✅ | 58 | 0.72 |
 | ngx-spinner | 22.0.1 | 22.1.3 | `>=20.0.0` | ✅ | ✅ | ✅ | 46 | 0.67 |
 | ngx-toastr | 20.0.5 | 21.1.0 | `^21.0.0` | ⚠️ works, not claimed | ✅ | ⚠️ works, not claimed | 48 | 0.67 |
-| primeng | 22.1.4 | 22.2.3 | `^22.1.0` | ❌ aot, not claimed | ❌ aot, not claimed | ❌ aot | 56 | 0.73 |
+| primeng | 22.1.4 | 22.2.3 | `^22.1.0` | ❌ aot, not claimed | ❌ skipLibCheck, not claimed | ❌ skipLibCheck | 82 | 0.74 |
 
 ✅ every check passed and the range claims it. ⚠️ every check passed, but the peer range leaves the version out. ❌ a check failed.
 
@@ -71,19 +71,21 @@ ng-matrix 0.1 was run with `--package` against the 50 most-downloaded Angular co
 ## Real findings
 
 ### Missing undeclared dependencies in published packages (primeng, ng-zorro-antd, ngx-guided-tour)
-- **primeng 22.1.4**: Fails AOT builds across all majors because entry point `primeng/chart` imports `chart.js/auto`, which is neither a declared dependency nor peer dependency.
-- **ng-zorro-antd 22.1.2**: Fails AOT builds because entry points import `cron-parser`, `d3-shape`, and `d3-drag`, none of which are declared dependencies of ng-zorro-antd.
-- **ngx-guided-tour 2.0.1**: Fails AOT builds because it directly imports `lodash`, which is not listed in `dependencies`.
+- **primeng 22.1.4**: Entry point `primeng/chart` imports `chart.js/auto`, which is neither a declared dependency nor peer dependency. When `primeng/chart` is omitted, the core library AOT builds cleanly, and ng-matrix reports the warning finding: `entry point primeng/chart imports chart.js, which isn't declared in dependencies or peers`.
+- **ng-zorro-antd 22.1.2**: Entry points `ng-zorro-antd/cron-expression` and `ng-zorro-antd/graph` import `cron-parser`, `d3-shape`, and `d3-drag`, none of which are declared dependencies of ng-zorro-antd. When those entry points are omitted, the rest of the library AOT builds cleanly with warnings reported.
+- **ngx-guided-tour 2.0.1**: Imports `lodash`, which is not declared in dependencies or peers. Omitted with warning; builds cleanly across 20, 21, and 22.
 
 ### Angular version typing & API mismatches
 - **@ngneat/overview 8.1.0**: Peer range is `>=21`. Fails strict typecheck on Angular 20 with `TS2459: Module '"@angular/core"' declares 'DirectiveWithBindings' locally, but it is not exported`.
 - **@kolkov/ngx-gallery 2.0.1**: Fails AOT on Angular 22 because it imports `HammerGestureConfig` and `HAMMER_GESTURE_CONFIG` from `@angular/platform-browser`, which were removed in Angular 22.
 - **ngx-monaco-editor-v2 22.0.5**: Angular linker crashes on Angular 20 (`Unsupported change detection strategy: ChangeDetectionStrategy.Eager`) because `ChangeDetectionStrategy.Eager` was introduced in Angular 21, yet the package claimed a `minVersion` of `17.2.0`. ng-matrix correctly flagged `advisory: true` for the partial compilation check and caught the incompatibility during AOT build.
+- **ngx-bootstrap 22.0.0**: Compiled with Angular 22 emitting `ChangeDetectionStrategy.Eager`, causing Angular 20 linker to crash (`Unsupported change detection strategy`). However, it builds and type-checks cleanly on both Angular 21 and 22.
 - **ngx-intl-tel-input 17.0.0**: Declares peer dependency on `ngx-bootstrap >= 12.0.0`. On Angular 20, picking `ngx-bootstrap@20.0.2` fails AOT because `ngx-bootstrap` imports `@angular/animations`, which wasn't part of `ngx-intl-tel-input`'s direct peers.
 
-### Strict template type-checking (ngx-bootstrap 22.0.0, @coreui/angular 5.7.37)
-- **ngx-bootstrap 22.0.0**: Fails strict templates on Angular 21/22 because `[collapse]` takes a boolean but bare attribute usage type-checks as string without a `booleanAttribute` input transform.
-- **@coreui/angular 5.7.37**: Typings reference `node_modules/rxjs/dist/types` directly, failing TypeScript module resolution with `skipLibCheck: false`.
+### Library typings errors with skipLibCheck: false (@coreui/angular 5.7.37, primeng 22.1.4, ng-zorro-antd 22.1.2)
+- **@coreui/angular 5.7.37**: Typings reference `node_modules/rxjs/dist/types` directly (`TS2307: Cannot find module 'node_modules/rxjs/dist/types'`). Reported as `library typings have errors with skipLibCheck: false`.
+- **primeng 22.1.4**: Typings reference `NodeJS.Timeout` without `@types/node`, and `chart.js` typings. Reported as `library typings have errors with skipLibCheck: false`.
+- **ng-zorro-antd 22.1.2**: Typings reference `monaco-editor` in `code-editor.d.ts`. Reported as `library typings have errors with skipLibCheck: false`.
 
 ### Tight sibling peer constraints (@ngrx/effects, @ngrx/entity, @ngrx/router-store)
 - `@ngrx/effects@22.0.1` requires `@ngrx/store` strictly at `"22.0.1"`. In an Angular 20 app, npm peer resolution resolves the Angular 20 ecosystem, causing a peer mismatch against the strict 22.0.1 requirement.
@@ -94,6 +96,9 @@ ng-matrix 0.1 was run with `--package` against the 50 most-downloaded Angular co
 | --- | --- | --- | --- | --- |
 | angular-calendar | AOT build on 20–22: `Could not resolve "date-fns"` | date-fns and moment are optional peers, and ng-matrix skipped optional peers. The smoke app imports every entry point, including the date-fns adapter, which needs date-fns, just as a user of that adapter installs it | Optional peers are installed; they still don't count toward what the range claims | `test/unit/peers.test.ts` (installs optional peers, but they claim nothing); fixture case `real-angular-calendar` |
 | ngx-toastr | AOT build on 22: `NG8023: Multiple components match node with tagname div: 'ToastBase', 'Toast'` | Both components use the selector `[toast-component]`. The smoke app used every export in one template, so one element matched both. No app imports both into one template; Angular 22 now reports it at compile time | Each standalone declarable, pipe and NgModule gets a small component of its own, as an app would use it | `test/unit/smoke.test.ts` (never puts two exports with the same selector in one template); fixture case `real-ngx-toastr` |
+| ngx-bootstrap | Strict build on 21 & 22: `TS2322: Type 'string' is not assignable to type 'boolean'` on `<div collapse></div>` | Smoke app wrote bare attributes for selector inputs (`collapse`), passing empty string `""` which fails strict templates for strictly `boolean` inputs | Smoke app only writes bare attributes if the input's write type accepts string/any/unknown or `""`; otherwise binds with `[prop]="v..."` | `test/unit/smoke.test.ts` (binds strictly boolean inputs); fixture case `strict-attr` |
+| primeng, ng-zorro-antd, ngx-guided-tour | AOT build on 20–22: `Could not resolve "chart.js/auto"`, `cron-parser`, `d3-*`, `lodash` | Entry points imported undeclared packages not in `dependencies` or `peerDependencies`. Real users only install those packages if using those components | Detected undeclared imports, omitted those entry points from the build, and reported warning findings | `test/unit/build.test.ts` (findUndeclaredImports); `test/unit/report.test.ts` (undeclared warnings) |
+| @coreui/angular | Strict build on 22 classified as strict-templates failure | Compiler errors were exclusively inside `.d.ts` files under `node_modules/` due to `skipLibCheck: false` | Differentiated `.d.ts`-only errors and reported finding `library typings have errors with skipLibCheck: false` | `test/unit/build.test.ts` (isDtsOnlyFailure); `test/unit/report.test.ts` (skipLibCheck findings) |
 
 ## How to reproduce
 
