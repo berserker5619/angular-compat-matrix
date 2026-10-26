@@ -82,14 +82,52 @@ describe('findings', () => {
   it('writes major lists as ranges', () => {
     assert.equal(majorsText([18, 19, 20, 22]), '18–20, 22');
   });
+
+  it('points a failing version with skipped install scripts at --allow-scripts, and only a failing one', () => {
+    const skipped = { skippedInstallScripts: ['core-js@3.46.0'] };
+    const list = findings(
+      [{ ...version(21, true, { aot: result('fail', 'x') }), ...skipped }, { ...version(22, true, {}), ...skipped }],
+      { peerDependencies: { '@angular/core': '^21.0.0 || ^22.0.0' } },
+    );
+    const notes = list.filter((f) => /--allow-scripts/.test(f.text));
+    assert.equal(notes.length, 1);
+    assert.deepEqual(notes[0].majors, [21]);
+    assert.match(notes[0].text, /core-js@3\.46\.0/);
+  });
+
+  it('reports skipLibCheck typings errors as a warning finding and does not fail exit code', () => {
+    const v22 = version(22, true, {});
+    v22.dtsErrors = true;
+    const list = findings([v22], { peerDependencies: { '@angular/core': '^22.0.0' } });
+    assert.equal(list.length, 1);
+    assert.equal(list[0].level, 'warning');
+    assert.deepEqual(list[0].majors, [22]);
+    assert.equal(list[0].text, 'library typings have errors with skipLibCheck: false');
+    assert.equal(exitCode([v22]), 0);
+  });
+
+  it('reports undeclared entry point dependencies as warnings', () => {
+    const v21 = version(21, true, {});
+    v21.omittedEntryPoints = [{ entry: 'primeng/chart', missingPackage: 'chart.js' }];
+    const v22 = version(22, true, {});
+    v22.omittedEntryPoints = [{ entry: 'primeng/chart', missingPackage: 'chart.js' }];
+    const list = findings([v21, v22], { peerDependencies: { '@angular/core': '^21.0.0 || ^22.0.0' } });
+    const warn = list.find((f) => f.text.includes('primeng/chart'));
+    assert.ok(warn);
+    assert.equal(warn.level, 'warning');
+    assert.deepEqual(warn.majors, [21, 22]);
+    assert.equal(warn.text, "entry point primeng/chart imports chart.js, which isn't declared in dependencies or peers");
+  });
 });
 
 describe('rendering', () => {
   const report: Report = {
+    schemaVersion: 1,
     tool: { name: 'angular-compat-matrix', version: '0.1.0' },
     checkedAt: '2026-10-26T10:00:00.000Z',
     library: { name: 'my-dropdown', version: '3.0.0', source: 'test', compiledWith: '21.2.0', highestMinVersion: '20.0.0', declarations: 4 },
     packageManager: 'npm',
+    installScripts: 'toolchain-only',
     node: 'v24.19.0',
     versions: [
       version(19, true, { partial: partialFail }),

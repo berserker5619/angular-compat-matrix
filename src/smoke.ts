@@ -282,18 +282,20 @@ class ApiReader {
   }
 
   /**
-   * Whether users write this input as a bare attribute (`<div myFlag>`): it takes a boolean,
-   * a string, or anything. A number or object input is bound to a value instead.
+   * Whether users write this input as a bare attribute (`<div myFlag>`): it takes a string,
+   * accepts string/boolean (e.g. booleanAttribute transform), or anything.
+   * If an input accepts strictly boolean (without accepting string or empty string), it must be bound
+   * with `[prop]="..."` because a bare attribute passes string `""`, causing TS2322 in strict templates.
    */
   private usedBare(node: TS.ClassDeclaration, property: string): boolean {
     const ts = this.ts;
     const write = this.inputWriteType(node, property);
-    if (!write) return true;
+    if (!write) return false;
     const parts = write.isUnion() ? write.types : [write];
-    // A union of other string literals ('ltr' | 'rtl') is bound to a value, like a number.
-    const flags = ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.String | ts.TypeFlags.Boolean | ts.TypeFlags.BooleanLiteral;
+    // Accepts string, any, unknown, or empty string literal "" (from booleanAttribute or union)
+    const stringFlags = ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.String;
     return parts.some(
-      (part) => (part.flags & flags) !== 0 || (part.isStringLiteral() && part.value === ''),
+      (part) => (part.flags & stringFlags) !== 0 || (part.isStringLiteral() && part.value === ''),
     );
   }
 

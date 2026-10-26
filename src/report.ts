@@ -37,7 +37,7 @@ export function findings(
     if (failure) {
       const [name, check] = failure;
       // Partial's message names the declaration; a build's message is just "failed", so its hint says more.
-      const why = name === 'partial' && check.hint ? `${check.message} ${check.hint}` : (check.hint ?? check.message);
+      const why = name === 'partial' && check.hint ? `${check.message} ${check.hint}` : (check.hint ?? check.errorLines?.[0] ?? check.message);
       if (version.claimed === true) {
         raw.push({ level: 'error', majors: [m], key: `fail:${name}:${why}`, text: `${CHECK_LABELS[name]}: ${why}` });
       } else if (version.claimed === false) {
@@ -50,6 +50,15 @@ export function findings(
       } else {
         raw.push({ level: 'warning', majors: [m], key: `fail:${name}:${why}`, text: `${CHECK_LABELS[name]}: ${why}` });
       }
+      if (version.skippedInstallScripts?.length) {
+        const list = version.skippedInstallScripts.join(', ');
+        raw.push({
+          level: 'note',
+          majors: [m],
+          key: `scripts:${list}`,
+          text: `Install scripts didn't run for ${list} (the default). If the failure comes from one of them, check again with --allow-scripts.`,
+        });
+      }
     } else if (version.claimed === false) {
       const ranges = version.peerMisses.map((miss) => `${miss.name} "${miss.range}"`).join(', ');
       raw.push({
@@ -57,6 +66,24 @@ export function findings(
         majors: [m],
         key: `unclaimed:${ranges}`,
         text: `works, but peerDependencies doesn't allow it (${ranges}). Widen the range to include it.`,
+      });
+    }
+    if (version.omittedEntryPoints?.length) {
+      for (const item of version.omittedEntryPoints) {
+        raw.push({
+          level: 'warning',
+          majors: [m],
+          key: `undeclared:${item.entry}:${item.missingPackage}`,
+          text: `entry point ${item.entry} imports ${item.missingPackage}, which isn't declared in dependencies or peers`,
+        });
+      }
+    }
+    if (version.dtsErrors) {
+      raw.push({
+        level: 'warning',
+        majors: [m],
+        key: 'skipLibCheck:dts-errors',
+        text: 'library typings have errors with skipLibCheck: false',
       });
     }
   }
@@ -168,9 +195,14 @@ export function renderTerminal(report: Report, verbose = false): string {
   for (const version of failing) {
     const failure = firstFailure(version);
     const errors = version.setupError ? version.setupError.split('\n').slice(1) : (failure?.[1].errorLines ?? []);
-    if (!errors.length) continue;
+    const full = failure?.[1].fullOutput;
+    if (!errors.length && !full) continue;
     lines.push('', `${rowLabel(version)}, ${failure ? CHECK_LABELS[failure[0]] : 'setup'}:`);
-    for (const line of errors.slice(0, verbose ? errors.length : 6)) lines.push(`  ${line.trim()}`);
+    if (verbose && full) {
+      for (const line of full.split(/\r?\n/)) lines.push(`  ${line}`);
+    } else {
+      for (const line of errors.slice(0, 6)) lines.push(`  ${line.trim()}`);
+    }
   }
   lines.push('', exitSummary(report));
   return lines.join('\n') + '\n';
@@ -232,6 +264,21 @@ export function renderMarkdown(report: Report): string {
   return lines.join('\n') + '\n';
 }
 
-export function renderJson(report: Report): string {
-  return JSON.stringify(report, null, 2) + '\n';
+export function renderJson(report: Report, verbose = false): string {
+  if (verbose) {
+    return JSON.stringify(report, null, 2) + '\n';
+  }
+  const stripped: Report = {
+    ...report,
+    versions: report.versions.map((v) => ({
+      ...v,
+      checks: Object.fromEntries(
+        Object.entries(v.checks).map(([name, check]) => {
+          const { fullOutput: _full, ...rest } = check;
+          return [name, rest];
+        }),
+      ) as Record<CheckName, CheckResult>,
+    })),
+  };
+  return JSON.stringify(stripped, null, 2) + '\n';
 }

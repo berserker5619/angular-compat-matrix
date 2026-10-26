@@ -1,0 +1,15 @@
+{
+  "name": "ngm-fixture-install-script-canary",
+  "version": "1.0.0",
+  "description": "Fixture: a library with a postinstall script that writes a marker file. By default it must not run; with --allow-scripts it must.",
+  "scripts": {
+    "build": "ng-packagr -p ng-package.json && node add-postinstall.mjs"
+  },
+  "peerDependencies": {
+    "@angular/common": "^20.0.0 || ^21.0.0 || ^22.0.0",
+    "@angular/core": "^20.0.0 || ^21.0.0 || ^22.0.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  }
+}

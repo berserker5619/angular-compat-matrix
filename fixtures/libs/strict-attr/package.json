@@ -1,7 +1,7 @@
 {
   "name": "ngm-fixture-strict-attr",
   "version": "1.0.0",
-  "description": "Fixture: a directive whose selector attribute is also a plain boolean input, so <div ngmToggle> is a type error that only strict templates report.",
+  "description": "Fixture: a directive whose selector attribute is also a boolean input; smoke app binds it ([ngmToggle]) rather than writing a bare attribute.",
   "scripts": {
     "build": "ng-packagr -p ng-package.json"
   },

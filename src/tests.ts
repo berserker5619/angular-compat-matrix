@@ -2,9 +2,10 @@ import { cpSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import semver from 'semver';
 import { type PackageManager, readJson, writeJson } from './app.ts';
-import { errorLines, exec, npm, quietEnv } from './exec.ts';
+import { environmentProblem, errorLines, exec, npm, quietEnv, stepTimeout } from './exec.ts';
 import { FRAMEWORK } from './peers.ts';
 import type { Registry } from './registry.ts';
+import { npmInstall, pnpmBuildSettings } from './scripts.ts';
 import { ensureTool, PNPM_VERSION, pnpmEntry, pnpmShimDir, withPath } from './tools.ts';
 import type { AngularMajor } from './versions.ts';
 
@@ -24,13 +25,17 @@ export interface TestsRequest {
   registry: Registry;
   cacheDir: string;
   offline: boolean;
+  allowScripts: boolean;
 }
 
 export interface TestsOutcome {
   pass: boolean;
   message: string;
   errorLines: string[];
+  fullOutput?: string;
   durationMs: number;
+  /** The machine's fault (a timeout, a full disk, the network), not the tests'. */
+  environment?: string;
 }
 
 /**
@@ -87,16 +92,16 @@ export async function runLibraryTests(request: TestsRequest): Promise<TestsOutco
   if (request.pm === 'npm') {
     const args = ['install', '--legacy-peer-deps', '--no-audit', '--no-fund'];
     if (request.offline) args.push('--offline');
-    install = await npm(args, { cwd: request.into, env, timeoutMs: 15 * 60_000 });
+    install = await npmInstall(args, { cwd: request.into, env, timeoutMs: stepTimeout() }, request.allowScripts);
   } else {
-    writeFileSync(join(request.into, 'pnpm-workspace.yaml'), 'strictPeerDependencies: false\nstrictDepBuilds: false\n');
+    writeFileSync(join(request.into, 'pnpm-workspace.yaml'), ['strictPeerDependencies: false', ...pnpmBuildSettings(request.allowScripts)].join('\n') + '\n');
     const pnpm = await ensureTool(request.cacheDir, 'pnpm', PNPM_VERSION, request.offline);
     // The test command runs in a shell; it has to find this pnpm, not whatever is (or isn't) installed.
     env = withPath(env, pnpmShimDir(request.cacheDir, pnpm));
     install = await exec(process.execPath, [pnpmEntry(pnpm), 'install', '--no-frozen-lockfile'], {
       cwd: request.into,
       env,
-      timeoutMs: 15 * 60_000,
+      timeoutMs: stepTimeout(),
     });
   }
   if (install.code !== 0) {
@@ -104,17 +109,21 @@ export async function runLibraryTests(request: TestsRequest): Promise<TestsOutco
       pass: false,
       message: `Installing the workspace with Angular ${request.angular.version} failed.`,
       errorLines: errorLines(install.output),
+      fullOutput: install.output,
       durationMs: Date.now() - started,
+      environment: environmentProblem(install),
     };
   }
 
   const command = request.command ?? `${request.pm} test`;
-  const result = await exec(command, [], { cwd: request.into, env, shell: true, timeoutMs: 30 * 60_000 });
+  const result = await exec(command, [], { cwd: request.into, env, shell: true, timeoutMs: stepTimeout() });
   const tail = result.output.split(/\r?\n/).filter((l) => l.trim()).slice(-8);
   return {
     pass: result.code === 0,
     message: result.code === 0 ? `\`${command}\` passed.` : `\`${command}\` exited with ${result.code}.`,
     errorLines: result.code === 0 ? tail.slice(-3) : errorLines(result.output),
+    fullOutput: result.output,
     durationMs: Date.now() - started,
+    environment: result.code === 0 ? undefined : environmentProblem(result),
   };
 }

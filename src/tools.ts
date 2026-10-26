@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
-import { errorLines, npm } from './exec.ts';
+import { environmentProblem, errorLines, npm } from './exec.ts';
 
 /** The pnpm ng-matrix uses, pinned so its peer and build-script rules don't shift under it. */
 export const PNPM_VERSION = '12.15.0';
@@ -10,6 +10,55 @@ export function defaultCacheDir(): string {
   if (process.env.NG_MATRIX_CACHE) return process.env.NG_MATRIX_CACHE;
   if (process.platform === 'win32' && process.env.LOCALAPPDATA) return join(process.env.LOCALAPPDATA, 'ng-matrix', 'Cache');
   return join(process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'), 'ng-matrix');
+}
+
+export function cacheStats(cacheDir: string): { bytes: number; count: number } {
+  let bytes = 0;
+  let count = 0;
+  if (!existsSync(cacheDir)) return { bytes: 0, count: 0 };
+  const stack = [cacheDir];
+  while (stack.length) {
+    const current = stack.pop()!;
+    let entries;
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+      } else if (entry.isFile()) {
+        try {
+          bytes += statSync(full).size;
+          count++;
+        } catch {
+          // ignore transient access errors
+        }
+      }
+    }
+  }
+  return { bytes, count };
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let val = bytes / 1024;
+  for (const unit of units) {
+    if (val < 1024 || unit === 'TB') {
+      return `${val >= 10 ? val.toFixed(1) : val.toFixed(2)} ${unit}`;
+    }
+    val /= 1024;
+  }
+  return `${bytes} B`;
+}
+
+export function cleanCache(cacheDir: string): void {
+  if (existsSync(cacheDir)) {
+    rmSync(cacheDir, { recursive: true, force: true, maxRetries: 5 });
+  }
 }
 
 const pending = new Map<string, Promise<string>>();
@@ -31,7 +80,9 @@ export function ensureTool(cacheDir: string, name: string, version: string, offl
 async function install(cacheDir: string, name: string, version: string, offline: boolean): Promise<string> {
   const home = join(cacheDir, 'tools', `${name.replace('/', '+')}@${version}`);
   const pkgDir = join(home, 'node_modules', ...name.split('/'));
-  if (existsSync(join(pkgDir, 'package.json'))) return pkgDir;
+  if (isComplete(pkgDir)) return pkgDir;
+  // A damaged entry (a truncated package.json, a missing bin) is downloaded again.
+  if (existsSync(home)) rmSync(home, { recursive: true, force: true, maxRetries: 5 });
   const tmp = `${home}.${process.pid}.tmp`;
   rmSync(tmp, { recursive: true, force: true });
   mkdirSync(tmp, { recursive: true });
@@ -40,7 +91,8 @@ async function install(cacheDir: string, name: string, version: string, offline:
   const result = await npm(args, { cwd: tmp });
   if (result.code !== 0) {
     rmSync(tmp, { recursive: true, force: true });
-    throw new Error(`Couldn't download ${name}@${version}:\n${errorLines(result.output).join('\n')}`);
+    const why = environmentProblem(result);
+    throw new Error(`Couldn't download ${name}@${version}${why ? `: ${why}` : ''}:\n${errorLines(result.output).join('\n')}`);
   }
   mkdirSync(dirname(home), { recursive: true });
   try {
@@ -50,6 +102,17 @@ async function install(cacheDir: string, name: string, version: string, offline:
     rmSync(tmp, { recursive: true, force: true });
   }
   return pkgDir;
+}
+
+/** A cached tool is usable when its package.json parses and every bin it declares is there. */
+export function isComplete(pkgDir: string): boolean {
+  try {
+    const manifest = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')) as { bin?: string | Record<string, string> };
+    const bins = typeof manifest.bin === 'string' ? [manifest.bin] : Object.values(manifest.bin ?? {});
+    return bins.every((bin) => existsSync(join(pkgDir, bin)));
+  } catch {
+    return false;
+  }
 }
 
 export function binOf(pkgDir: string, bin: string): string {

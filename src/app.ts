@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { errorLines, exec, quietEnv } from './exec.ts';
+import { environmentProblem, errorLines, exec, quietEnv, stepTimeout } from './exec.ts';
 import { binOf, ensureTool } from './tools.ts';
 import type { AngularMajor } from './versions.ts';
 
@@ -32,11 +32,12 @@ export async function generateApp(
   const result = await exec(process.execPath, [binOf(cli, 'ng'), ...newAppArgs(pm)], {
     cwd: parentDir,
     env: quietEnv({ CI: '1' }),
-    timeoutMs: 10 * 60_000,
+    timeoutMs: stepTimeout(),
   });
   const appDir = join(parentDir, 'smoke');
   if (result.code !== 0 || !existsSync(join(appDir, 'angular.json'))) {
-    throw new Error(`ng new (Angular CLI ${angular.cliVersion}) failed:\n${errorLines(result.output).join('\n')}`);
+    const why = environmentProblem(result);
+    throw new Error(`ng new (Angular CLI ${angular.cliVersion}) failed${why ? `: ${why}` : ''}:\n${errorLines(result.output).join('\n')}`);
   }
   return appDir;
 }

@@ -3,16 +3,17 @@ import { createRequire } from 'node:module';
 import { freemem, availableParallelism } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { configureBuild, generateApp, type PackageManager, readJson, writeJson } from './app.ts';
-import { ngBuild } from './build.ts';
+import { findUndeclaredImports, isDtsOnlyFailure, ngBuild } from './build.ts';
 import { installLibrary } from './install.ts';
 import type { PackedLibrary } from './library.ts';
 import { type CheckName, CHECKS, type CheckResult, result, type VersionReport } from './model.ts';
 import { judgePartial, type PartialSummary } from './partial.ts';
 import { planPeers } from './peers.ts';
 import type { Registry } from './registry.ts';
-import { entryPoints, hasSignalWriteBrand, readPublicApi, renderSmoke, writeSmoke } from './smoke.ts';
+import { entryPoints, hasSignalWriteBrand, type PublicApi, readPublicApi, renderSmoke, writeSmoke } from './smoke.ts';
 import { runLibraryTests, swapVersions } from './tests.ts';
 import type { AngularMajor } from './versions.ts';
+import type { Progress } from './progress.ts';
 
 export interface RunContext {
   library: PackedLibrary;
@@ -28,7 +29,10 @@ export interface RunContext {
   testCommand?: string;
   consumer?: string;
   keep: boolean;
+  /** Let every install script run, not just the Angular toolchain's (--allow-scripts). */
+  allowScripts: boolean;
   log: (line: string) => void;
+  progress?: Progress;
 }
 
 /** About what one Angular production build needs; versions beyond what memory allows wait their turn. */
@@ -78,8 +82,15 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
   };
   const finish = () => {
     report.durationMs = Date.now() - started;
+    ctx.progress?.done(angular.major);
     ctx.log(`${tag}: done in ${Math.round(report.durationMs / 1000)} s`);
     return report;
+  };
+  // A timeout, a full disk or a network error says nothing about the package: this version
+  // wasn't checked (exit 2), rather than failing a check.
+  const notChecked = (step: string, why: string, lines: string[]) => {
+    report.setupError = [`${step} on ${tag}: ${why}.`, ...lines].join('\n');
+    return finish();
   };
 
   // Peer range: reported, but never stops the other checks.
@@ -97,6 +108,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
   mkdirSync(versionDir, { recursive: true });
   let appDir: string;
   try {
+    ctx.progress?.step(angular.major, ctx.consumer ? 'creating consumer app' : `ng new (CLI ${angular.cliVersion})`);
     ctx.log(`${tag}: creating the app (${ctx.consumer ? 'your --consumer app' : `ng new, CLI ${angular.cliVersion}`})`);
     appDir = ctx.consumer
       ? await copyConsumer(ctx, angular, plan.installs, versionDir)
@@ -109,6 +121,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
   }
 
   try {
+    ctx.progress?.step(angular.major, `installing with ${ctx.pm}`);
     ctx.log(`${tag}: installing ${ctx.library.manifest.name} with ${ctx.pm}`);
     const installStarted = Date.now();
     const installed = await installLibrary({
@@ -120,9 +133,14 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
       angularMajor: angular.major,
       cacheDir: ctx.cacheDir,
       offline: ctx.offline,
+      allowScripts: ctx.allowScripts,
     });
+    if (installed.skippedScripts.length) report.skippedInstallScripts = installed.skippedScripts;
+    if (installed.environment) return notChecked('The install', installed.environment, installed.errorLines);
     checks.install = result(installed.pass ? 'pass' : 'fail', installed.message, {
       errorLines: installed.errorLines,
+      fullOutput: installed.fullOutput,
+      hint: installed.pass ? undefined : installed.errorLines[0],
       durationMs: Date.now() - installStarted,
     });
     if (!installed.pass) return finish();
@@ -137,9 +155,10 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
     if (!partial.pass) return finish();
 
     let files: string[] | undefined;
+    let api: PublicApi | undefined;
     if (!ctx.consumer) {
       try {
-        const api = readPublicApi(appDir, entryPoints(ctx.library.manifest as Parameters<typeof entryPoints>[0]));
+        api = readPublicApi(appDir, entryPoints(ctx.library.manifest as Parameters<typeof entryPoints>[0]));
         writeSmoke(appDir, renderSmoke(api, { signalWriteBrand: hasSignalWriteBrand(appDir) }));
         files = ['src/ngm-main.ts'];
       } catch (error) {
@@ -151,28 +170,87 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
     }
     const project = configureBuild(appDir, files?.[0]);
 
+    ctx.progress?.step(angular.major, 'AOT build');
     ctx.log(`${tag}: AOT build`);
-    const aot = await ngBuild(appDir, project.tsConfig, { strictTemplates: false, skipLibCheck: true }, files);
+    let aot = await ngBuild(appDir, project.tsConfig, { strictTemplates: false, skipLibCheck: true }, files);
+    if (aot.environment) return notChecked('The AOT build', aot.environment, aot.errorLines);
+
+    const omittedList: Array<{ entry: string; missingPackage: string }> = [];
+    while (!aot.pass && !ctx.consumer && api) {
+      const undeclared = findUndeclaredImports(aot.errorLines, ctx.library.manifest as any, api.entries);
+      if (!undeclared.length) break;
+
+      const mainName = ctx.library.manifest.name;
+      const isMain = (entry: string) => entry === mainName || entry === '.';
+      const mainUndeclared = undeclared.find((u) => isMain(u.entry));
+      const omittedSet = new Set(undeclared.map((u) => u.entry));
+      const remainingEntries = api.entries.filter((e) => !omittedSet.has(e));
+
+      if (mainUndeclared || remainingEntries.length === 0) {
+        const item = mainUndeclared ?? undeclared[0];
+        const reason = `${item.entry} imports ${item.missingPackage}, which isn't declared in dependencies or peers. Every user of ${item.entry} needs ${item.missingPackage} installed.`;
+        checks.aot = result('fail', reason, {
+          errorLines: aot.errorLines,
+          fullOutput: aot.fullOutput,
+          hint: reason,
+          durationMs: aot.durationMs,
+        });
+        return finish();
+      }
+
+      omittedList.push(...undeclared);
+      api.entries = remainingEntries;
+      api.declarables = api.declarables.filter((d) => !d.entry || !omittedSet.has(d.entry));
+      api.pipes = api.pipes.filter((p) => !p.entry || !omittedSet.has(p.entry));
+      api.modules = api.modules.filter((m) => !omittedSet.has(m.entry));
+      api.services = api.services.filter((s) => !omittedSet.has(s.entry));
+      writeSmoke(appDir, renderSmoke(api, { signalWriteBrand: hasSignalWriteBrand(appDir) }));
+      ctx.log(`${tag}: re-running AOT build without omitted entry points: ${[...omittedSet].join(', ')}`);
+      aot = await ngBuild(appDir, project.tsConfig, { strictTemplates: false, skipLibCheck: true }, files);
+      if (aot.environment) return notChecked('The AOT build', aot.environment, aot.errorLines);
+    }
+    if (omittedList.length) {
+      report.omittedEntryPoints = omittedList;
+    }
+
     checks.aot = result(aot.pass ? 'pass' : 'fail', aot.pass ? 'Production build succeeded.' : 'Production build failed.', {
       errorLines: aot.errorLines,
-      hint: aot.hint,
+      fullOutput: aot.fullOutput,
+      hint: aot.hint ?? aot.errorLines[0],
       durationMs: aot.durationMs,
     });
     if (!aot.pass) return finish();
 
+    ctx.progress?.step(angular.major, 'strict build');
     ctx.log(`${tag}: strict build`);
     const strict = await ngBuild(appDir, project.tsConfig, { strictTemplates: true, skipLibCheck: false }, files);
+    if (strict.environment) return notChecked('The strict build', strict.environment, strict.errorLines);
+    const dtsOnly = !strict.pass && isDtsOnlyFailure(strict.errorLines);
+    if (dtsOnly) {
+      report.dtsErrors = true;
+    }
+    const dtsHint = strict.hint ?? (dtsOnly ? 'library typings have errors with skipLibCheck: false' : undefined);
     checks.strict = result(
-      strict.pass ? 'pass' : 'fail',
-      strict.pass ? 'Builds with strictTemplates: true and skipLibCheck: false.' : 'Fails with strictTemplates: true and skipLibCheck: false.',
-      { errorLines: strict.errorLines, hint: strict.hint, durationMs: strict.durationMs },
+      strict.pass || dtsOnly ? 'pass' : 'fail',
+      strict.pass
+        ? 'Builds with strictTemplates: true and skipLibCheck: false.'
+        : dtsOnly
+          ? 'Builds with strictTemplates: true; library typings have errors with skipLibCheck: false.'
+          : (dtsHint ?? strict.errorLines[0] ?? 'Fails with strictTemplates: true and skipLibCheck: false.'),
+      {
+        errorLines: strict.errorLines,
+        fullOutput: strict.fullOutput,
+        hint: dtsHint ?? strict.errorLines[0],
+        durationMs: strict.durationMs,
+      },
     );
-    if (!strict.pass) return finish();
+    if (checks.strict.status === 'fail') return finish();
 
     if (ctx.tests) {
       if (!ctx.workspace) {
         checks.tests = result('off', 'No workspace to test: the package came from --tarball or --package.');
       } else {
+        ctx.progress?.step(angular.major, 'library tests');
         ctx.log(`${tag}: library tests`);
         const tests = await runLibraryTests({
           workspace: ctx.workspace,
@@ -184,9 +262,13 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
           registry: ctx.registry,
           cacheDir: ctx.cacheDir,
           offline: ctx.offline,
+          allowScripts: ctx.allowScripts,
         });
+        if (tests.environment) return notChecked('The library tests', tests.environment, tests.errorLines);
         checks.tests = result(tests.pass ? 'pass' : 'fail', tests.message, {
           errorLines: tests.errorLines,
+          fullOutput: tests.fullOutput,
+          hint: tests.pass ? undefined : tests.errorLines[0],
           durationMs: tests.durationMs,
         });
       }

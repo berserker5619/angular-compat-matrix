@@ -18,12 +18,15 @@ export const CHECK_LABELS: Record<CheckName, string> = {
  */
 export type CheckStatus = 'pass' | 'fail' | 'not-run' | 'off' | 'none';
 
+export const SCHEMA_VERSION = 1;
+
 export interface CheckResult {
   status: CheckStatus;
   /** Partial only: a pass that proves nothing, because the package was compiled with a newer major. */
   advisory?: boolean;
   message: string;
   errorLines: string[];
+  fullOutput?: string;
   hint?: string;
   durationMs: number;
 }
@@ -40,6 +43,12 @@ export interface VersionReport {
   checks: Record<CheckName, CheckResult>;
   /** ng-matrix itself couldn't set this version up (ng new failed, say): not the package's fault. */
   setupError?: string;
+  /** Packages in the app whose install scripts didn't run (the default; --allow-scripts runs them). */
+  skippedInstallScripts?: string[];
+  /** Entry points left out of the build because they import packages not declared in dependencies or peers. */
+  omittedEntryPoints?: Array<{ entry: string; missingPackage: string }>;
+  /** Whether strict build had typing errors only in node_modules .d.ts files with skipLibCheck: false. */
+  dtsErrors?: boolean;
   durationMs: number;
   appDir?: string;
 }
@@ -53,6 +62,7 @@ export interface Finding {
 }
 
 export interface Report {
+  schemaVersion: number;
   tool: { name: string; version: string };
   checkedAt: string;
   library: {
@@ -65,6 +75,8 @@ export interface Report {
     declarations: number;
   };
   packageManager: string;
+  /** Which install scripts ran: only the Angular toolchain's (the default), or all (--allow-scripts). */
+  installScripts: 'toolchain-only' | 'all';
   node: string;
   versions: VersionReport[];
   findings: Finding[];
