@@ -1,0 +1,15 @@
+{
+  "name": "ngm-fixture-strict-attr",
+  "version": "1.0.0",
+  "description": "Fixture: a directive whose selector attribute is also a plain boolean input, so <div ngmToggle> is a type error that only strict templates report.",
+  "scripts": {
+    "build": "ng-packagr -p ng-package.json"
+  },
+  "peerDependencies": {
+    "@angular/common": "^20.0.0 || ^21.0.0 || ^22.0.0",
+    "@angular/core": "^20.0.0 || ^21.0.0 || ^22.0.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  }
+}

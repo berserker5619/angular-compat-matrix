@@ -1,0 +1,15 @@
+{
+  "name": "ngm-fixture-peer-narrow",
+  "version": "1.0.0",
+  "description": "Fixture: claims only Angular 21 but works on 22 too. Peer range fails on 22, nothing else does.",
+  "scripts": {
+    "build": "ng-packagr -p ng-package.json"
+  },
+  "peerDependencies": {
+    "@angular/common": "^21.0.0",
+    "@angular/core": "^21.0.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  }
+}

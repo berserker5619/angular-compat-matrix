@@ -1,0 +1,13 @@
+{
+  "name": "ngm-fixture-cli-workspace",
+  "version": "1.0.0",
+  "peerDependencies": {
+    "@angular/common": "^21.0.0 || ^22.0.0",
+    "@angular/core": "^21.0.0 || ^22.0.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "sideEffects": false,
+  "description": "Fixture: an Angular CLI workspace whose library is built with ng build. Passes every check."
+}

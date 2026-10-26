@@ -1,0 +1,15 @@
+{
+  "name": "ngm-fixture-peer-wide",
+  "version": "1.0.0",
+  "description": "Fixture: claims Angular 20 to 22 but calls isWritableSignal, added in 21. The AOT build fails on 20.",
+  "scripts": {
+    "build": "ng-packagr -p ng-package.json"
+  },
+  "peerDependencies": {
+    "@angular/common": "^20.0.0 || ^21.0.0 || ^22.0.0",
+    "@angular/core": "^20.0.0 || ^21.0.0 || ^22.0.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  }
+}

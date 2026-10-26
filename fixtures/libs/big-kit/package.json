@@ -1,0 +1,15 @@
+{
+  "name": "ngm-fixture-big-kit",
+  "version": "1.0.0",
+  "description": "Fixture: an icon kit over 1 MB, more than the default production budget allows. Must pass every check.",
+  "scripts": {
+    "build": "node generate-icons.mjs && ng-packagr -p ng-package.json"
+  },
+  "peerDependencies": {
+    "@angular/common": "^20.0.0 || ^21.0.0 || ^22.0.0",
+    "@angular/core": "^20.0.0 || ^21.0.0 || ^22.0.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  }
+}

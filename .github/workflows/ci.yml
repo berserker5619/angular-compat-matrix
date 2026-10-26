@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Weekly, so a new Angular release that breaks a fixture shows up before users notice.
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  cases:
+    name: List fixture cases
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.list.outputs.list }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - id: list
+        run: echo "list=$(node test/fixtures/run.ts --list)" >> "$GITHUB_OUTPUT"
+
+  fixtures:
+    name: Fixture ${{ matrix.case }}
+    needs: [unit, cases]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        case: ${{ fromJSON(needs.cases.outputs.list) }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            fixtures/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: fixtures
+      - run: npm run build
+      - name: Cache Angular CLIs and pnpm that ng-matrix downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ng-matrix/tools
+          key: ng-matrix-tools-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: ng-matrix-tools-${{ runner.os }}-
+      - run: node test/fixtures/run.ts ${{ matrix.case }}

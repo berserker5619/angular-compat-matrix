@@ -1,0 +1,15 @@
+{
+  "name": "ngm-fixture-dts-only",
+  "version": "1.0.0",
+  "description": "Fixture: its typings use DebounceTimer, a type Angular 21 doesn't have. Only a build with skipLibCheck: false reports it, on 21.",
+  "scripts": {
+    "build": "ng-packagr -p ng-package.json"
+  },
+  "peerDependencies": {
+    "@angular/common": "^21.0.0 || ^22.0.0",
+    "@angular/core": "^21.0.0 || ^22.0.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "ngm-fixture-peer-cdk",
+  "version": "1.0.0",
+  "description": "Fixture: core claims Angular 21 and 22, but the @angular/cdk peer only claims 22. Peer range fails on 21 though everything works.",
+  "scripts": {
+    "build": "ng-packagr -p ng-package.json"
+  },
+  "peerDependencies": {
+    "@angular/cdk": "^22.0.0",
+    "@angular/common": "^21.0.0 || ^22.0.0",
+    "@angular/core": "^21.0.0 || ^22.0.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  }
+}

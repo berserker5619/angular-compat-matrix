@@ -1,0 +1,15 @@
+{
+  "name": "ngm-fixture-partial-too-low",
+  "version": "1.0.0",
+  "description": "Fixture: partial-too-new with every minVersion lowered to 12.0.0, the way Angular 22 understates its factory declarations. Partial passes (advisory) on 21 and the AOT build crashes.",
+  "scripts": {
+    "build": "ng-packagr -p ng-package.json && node lower-min-version.mjs"
+  },
+  "peerDependencies": {
+    "@angular/common": "^21.0.0 || ^22.0.0",
+    "@angular/core": "^21.0.0 || ^22.0.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  }
+}

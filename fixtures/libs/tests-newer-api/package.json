@@ -1,0 +1,21 @@
+{
+  "name": "ngm-fixture-tests-newer-api",
+  "version": "1.0.0",
+  "description": "Fixture: the library works on Angular 20 to 22, but its own tests call isWritableSignal, added in 21. Tests fail on 20 only.",
+  "scripts": {
+    "build": "ng-packagr -p ng-package.json",
+    "test": "node test/api.test.mjs"
+  },
+  "peerDependencies": {
+    "@angular/common": "^20.0.0 || ^21.0.0 || ^22.0.0",
+    "@angular/core": "^20.0.0 || ^21.0.0 || ^22.0.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/core": "~22.2.3",
+    "rxjs": "~7.8.2",
+    "tslib": "^2.8.1"
+  }
+}

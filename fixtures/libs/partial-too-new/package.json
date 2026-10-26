@@ -1,0 +1,15 @@
+{
+  "name": "ngm-fixture-partial-too-new",
+  "version": "1.0.0",
+  "description": "Fixture: uses @Service(), new in Angular 22 (minVersion 22.0.0), while claiming Angular 21. Partial fails on 21.",
+  "scripts": {
+    "build": "ng-packagr -p ng-package.json"
+  },
+  "peerDependencies": {
+    "@angular/common": "^21.0.0 || ^22.0.0",
+    "@angular/core": "^21.0.0 || ^22.0.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  }
+}

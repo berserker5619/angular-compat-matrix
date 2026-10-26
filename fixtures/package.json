@@ -1,0 +1,20 @@
+{
+  "name": "ng-matrix-fixtures",
+  "private": true,
+  "description": "Shared Angular 22 toolchain for the fixture libraries. Each fixture is built with it, then checked by ng-matrix.",
+  "devDependencies": {
+    "@angular/build": "~22.2.4",
+    "@angular/cdk": "~22.2.4",
+    "@angular/cli": "~22.2.4",
+    "@angular/common": "~22.2.3",
+    "@angular/compiler": "~22.2.3",
+    "@angular/compiler-cli": "~22.2.3",
+    "@angular/core": "~22.2.3",
+    "@angular/forms": "~22.2.3",
+    "@angular/platform-browser": "~22.2.3",
+    "ng-packagr": "~22.2.5",
+    "rxjs": "~7.8.2",
+    "tslib": "^2.8.1",
+    "typescript": "~6.0.3"
+  }
+}
