@@ -41,7 +41,7 @@ describe('exit code', () => {
     assert.equal(exitCode([version(22, null, { aot: result('fail', 'x') })]), 0);
   });
 
-  it("is 2 when ng-matrix couldn't set a version up", () => {
+  it("is 2 when angular-compat-matrix couldn't set a version up", () => {
     assert.equal(exitCode([{ ...version(21, true, {}), setupError: 'ng new failed' }]), 2);
   });
 });

@@ -9,7 +9,7 @@ export interface VersionMeta {
   engines?: Record<string, string>;
 }
 
-/** The parts of a registry document ng-matrix uses; everything else is dropped before caching. */
+/** The parts of a registry document angular-compat-matrix uses; everything else is dropped before caching. */
 export interface Packument {
   name: string;
   'dist-tags': Record<string, string>;

@@ -1,4 +1,4 @@
-// Runs ng-matrix against the fixture libraries and real packages, and checks every result
+// Runs angular-compat-matrix against the fixture libraries and real packages, and checks every result
 // against what the spec says it must be. Each fixture fails exactly one check, or none.
 //
 //   node test/fixtures/run.ts               every case, two at a time

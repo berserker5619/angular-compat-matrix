@@ -3,13 +3,13 @@ import { homedir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { environmentProblem, errorLines, npm } from './exec.ts';
 
-/** The pnpm ng-matrix uses, pinned so its peer and build-script rules don't shift under it. */
+/** The pnpm angular-compat-matrix uses, pinned so its peer and build-script rules don't shift under it. */
 export const PNPM_VERSION = '12.15.0';
 
 export function defaultCacheDir(): string {
-  if (process.env.NG_MATRIX_CACHE) return process.env.NG_MATRIX_CACHE;
-  if (process.platform === 'win32' && process.env.LOCALAPPDATA) return join(process.env.LOCALAPPDATA, 'ng-matrix', 'Cache');
-  return join(process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'), 'ng-matrix');
+  if (process.env.ANGULAR_COMPAT_MATRIX_CACHE) return process.env.ANGULAR_COMPAT_MATRIX_CACHE;
+  if (process.platform === 'win32' && process.env.LOCALAPPDATA) return join(process.env.LOCALAPPDATA, 'angular-compat-matrix', 'Cache');
+  return join(process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'), 'angular-compat-matrix');
 }
 
 export function cacheStats(cacheDir: string): { bytes: number; count: number } {
@@ -98,7 +98,7 @@ async function install(cacheDir: string, name: string, version: string, offline:
   try {
     renameSync(tmp, home);
   } catch {
-    // Another ng-matrix process got there first; theirs is as good as ours.
+    // Another angular-compat-matrix process got there first; theirs is as good as ours.
     rmSync(tmp, { recursive: true, force: true });
   }
   return pkgDir;
@@ -124,7 +124,7 @@ export function binOf(pkgDir: string, bin: string): string {
 
 /**
  * pnpm 11+ is a native binary that an install script puts in place of the `pnpm` bin; tools are
- * installed with scripts off, so ng-matrix enters through `bin/pnpm.mjs`, as Corepack does, which
+ * installed with scripts off, so angular-compat-matrix enters through `bin/pnpm.mjs`, as Corepack does, which
  * finds the binary in the `@pnpm/exe.<platform>` optional dependency.
  */
 export function pnpmEntry(pkgDir: string): string {

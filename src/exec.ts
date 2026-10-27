@@ -62,7 +62,7 @@ export function exec(command: string, args: string[], options: ExecOptions): Pro
   const started = Date.now();
   if (verboseEnabled) {
     const fullCmd = options.shell ? [command, ...args].join(' ') : `${command} ${args.join(' ')}`;
-    process.stderr.write(`[ng-matrix] > ${fullCmd}\n`);
+    process.stderr.write(`[angular-compat-matrix] > ${fullCmd}\n`);
   }
   return new Promise((resolve) => {
     // On Linux and macOS each child leads its own process group, so killing the group stops
@@ -126,7 +126,7 @@ export function npmCli(): string[] {
   for (const candidate of candidates) {
     if (candidate && /npm-cli\.js$/.test(candidate) && existsSync(candidate)) return [process.execPath, candidate];
   }
-  throw new Error("Couldn't find npm next to this Node. ng-matrix needs the npm that ships with Node.");
+  throw new Error("Couldn't find npm next to this Node. angular-compat-matrix needs the npm that ships with Node.");
 }
 
 export function npm(args: string[], options: ExecOptions): Promise<ExecResult> {
@@ -174,7 +174,7 @@ export function stepTimeout(): number {
 export function environmentProblem(result: Pick<ExecResult, 'output' | 'timedOut'>): string | undefined {
   if (result.timedOut) return `timed out after ${formatMinutes(stepTimeoutMs)} (raise the limit with --step-timeout <minutes>)`;
   if (/\bENOSPC\b|no space left on device|not enough space on the disk/i.test(result.output)) {
-    return 'the disk is full (ENOSPC). Free some space, or point TMPDIR/TEMP and NG_MATRIX_CACHE somewhere with room';
+    return 'the disk is full (ENOSPC). Free some space, or point TMPDIR/TEMP and ANGULAR_COMPAT_MATRIX_CACHE somewhere with room';
   }
   const network = /^.*\b(EAI_AGAIN|ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ERR_SOCKET_TIMEOUT|ERR_PNPM_META_FETCH_FAIL|socket hang up)\b.*$/im.exec(
     result.output,

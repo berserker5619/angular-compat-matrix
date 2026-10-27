@@ -44,7 +44,7 @@ export class Progress {
       const elapsed = Math.floor((now - item.started) / 1000);
       parts.push(`Angular ${major}: ${item.step} (${elapsed}s)`);
     }
-    const text = `[ng-matrix] ${parts.join(' | ')}`;
+    const text = `[angular-compat-matrix] ${parts.join(' | ')}`;
     process.stderr.write(`\r\x1b[K${text}`);
     this.rendered = true;
   }

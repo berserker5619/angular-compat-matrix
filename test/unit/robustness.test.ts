@@ -77,18 +77,18 @@ describe('registry', () => {
 describe('cache and temp folders', () => {
   it('removes work folders whose run is gone, and leaves live ones', () => {
     const base = join(root, 'tmp');
-    mkdirSync(join(base, 'ng-matrix-dead'), { recursive: true });
-    writeFileSync(join(base, 'ng-matrix-dead', '.ng-matrix-pid'), '999999');
-    mkdirSync(join(base, 'ng-matrix-live'), { recursive: true });
-    writeFileSync(join(base, 'ng-matrix-live', '.ng-matrix-pid'), String(process.pid));
-    mkdirSync(join(base, 'ng-matrix-old-0.1'), { recursive: true }); // 0.1.0 wrote no owner file
+    mkdirSync(join(base, 'angular-compat-matrix-dead'), { recursive: true });
+    writeFileSync(join(base, 'angular-compat-matrix-dead', '.angular-compat-matrix-pid'), '999999');
+    mkdirSync(join(base, 'angular-compat-matrix-live'), { recursive: true });
+    writeFileSync(join(base, 'angular-compat-matrix-live', '.angular-compat-matrix-pid'), String(process.pid));
+    mkdirSync(join(base, 'angular-compat-matrix-no-owner'), { recursive: true }); // killed before writing its owner file
     const twoDaysAgo = (Date.now() - 2 * 24 * 3600 * 1000) / 1000;
-    utimesSync(join(base, 'ng-matrix-old-0.1'), twoDaysAgo, twoDaysAgo);
+    utimesSync(join(base, 'angular-compat-matrix-no-owner'), twoDaysAgo, twoDaysAgo);
     mkdirSync(join(base, 'something-else'), { recursive: true });
     sweepWorkDirs(base);
-    assert.ok(!existsSync(join(base, 'ng-matrix-dead')));
-    assert.ok(!existsSync(join(base, 'ng-matrix-old-0.1')));
-    assert.ok(existsSync(join(base, 'ng-matrix-live')));
+    assert.ok(!existsSync(join(base, 'angular-compat-matrix-dead')));
+    assert.ok(!existsSync(join(base, 'angular-compat-matrix-no-owner')));
+    assert.ok(existsSync(join(base, 'angular-compat-matrix-live')));
     assert.ok(existsSync(join(base, 'something-else')));
   });
 

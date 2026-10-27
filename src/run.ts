@@ -163,7 +163,7 @@ export async function checkVersion(ctx: RunContext, angular: AngularMajor): Prom
         files = ['src/ngm-main.ts'];
       } catch (error) {
         checks.aot = result('fail', `Couldn't generate the smoke app from the package's typings: ${(error as Error).message}`, {
-          hint: 'If the typings are fine, give ng-matrix an example app with --consumer.',
+          hint: 'If the typings are fine, give angular-compat-matrix an example app with --consumer.',
         });
         return finish();
       }

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { type ExecOptions, type ExecResult, npm } from './exec.ts';
 
 /*
- * Install scripts run arbitrary code on the machine. By default ng-matrix runs only the ones the
+ * Install scripts run arbitrary code on the machine. By default angular-compat-matrix runs only the ones the
  * Angular toolchain itself needs: every package with an install script in a fresh Angular 17 to 22
  * app is on this list. The package under test and its dependencies run none, unless --allow-scripts.
  */

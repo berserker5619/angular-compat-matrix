@@ -1,7 +1,7 @@
 {
-  "name": "ng-matrix-fixtures",
+  "name": "angular-compat-matrix-fixtures",
   "private": true,
-  "description": "Shared Angular 22 toolchain for the fixture libraries. Each fixture is built with it, then checked by ng-matrix.",
+  "description": "Shared Angular 22 toolchain for the fixture libraries. Each fixture is built with it, then checked by angular-compat-matrix.",
   "devDependencies": {
     "@angular/build": "~22.2.4",
     "@angular/cdk": "~22.2.4",

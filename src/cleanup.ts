@@ -10,8 +10,8 @@ import { killAllChildren } from './exec.ts';
  * can be told apart from what a running one is still using.
  */
 
-const PREFIX = 'ng-matrix-';
-const OWNER = '.ng-matrix-pid';
+const PREFIX = 'angular-compat-matrix-';
+const OWNER = '.angular-compat-matrix-pid';
 
 export function createWorkDir(): string {
   const dir = mkdtempSync(join(tmpdir(), PREFIX));
@@ -34,7 +34,7 @@ export function removeDir(dir: string): void {
   rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 }
 
-/** Removes work folders whose run is gone. Folders without an owner file (0.1.0) go after a day. */
+/** Removes work folders whose run is gone. Folders without an owner file (a run killed before writing it) go after a day. */
 export function sweepWorkDirs(base = tmpdir()): string[] {
   const removed: string[] = [];
   let entries: string[];

@@ -12,7 +12,7 @@ import type { AngularMajor } from './versions.ts';
 /** Packages released with the Angular CLI, versioned with it. */
 const TOOLING = /^(@angular\/(cli|build|ssr|pwa)|@angular-devkit\/.+|@schematics\/angular)$/;
 
-const SKIP = new Set(['node_modules', '.git', '.angular', 'dist', '.nx', '.ng-matrix', 'coverage']);
+const SKIP = new Set(['node_modules', '.git', '.angular', 'dist', '.nx', 'coverage']);
 
 export interface TestsRequest {
   workspace: string;

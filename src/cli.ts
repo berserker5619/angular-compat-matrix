@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { cleanUpOnInterrupt, createWorkDir, removeDir, sweepCache, sweepWorkDirs } from './cleanup.ts';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import semver from 'semver';
 import type { PackageManager } from './app.ts';
-import { LibraryError, prepareLibrary } from './library.ts';
+import { detectBuild, LibraryError, prepareLibrary, sourceManifest } from './library.ts';
 import { SCHEMA_VERSION, type Report } from './model.ts';
 import { angularImports, scanPackage, summarize } from './partial.ts';
 import { Registry, RegistryError } from './registry.ts';
@@ -15,7 +15,8 @@ import { defaultConcurrency, runAll } from './run.ts';
 import { setStepTimeout, setVerbose } from './exec.ts';
 import { Progress } from './progress.ts';
 import { ALLOW_SCRIPTS_WARNING } from './scripts.ts';
-import { cacheStats, cleanCache, defaultCacheDir, formatBytes } from './tools.ts';
+import { cacheStats, cleanCache, defaultCacheDir, formatBytes, PNPM_VERSION } from './tools.ts';
+import { annotations, githubWorkflow, mergeReports, planMatrix, WORKFLOW_PATH } from './ci.ts';
 import {
   type AngularMajor,
   defaultMajors,
@@ -27,16 +28,16 @@ import {
   parseVersionList,
 } from './versions.ts';
 
-const HELP = `ng-matrix: which Angular versions does your published library really work with?
+const HELP = `angular-compat-matrix: which Angular versions does your published library really work with?
 
 It builds and packs your library, installs the tarball into a fresh app for each Angular
 major (made with that major's own CLI), builds it, and reports a matrix.
 
 Usage
   npx angular-compat-matrix [options]
-  ng-matrix [options]                  (once installed)
-  ng-matrix cache                      (show cache location and size)
-  ng-matrix cache clean                (delete the cache)
+  npx angular-compat-matrix cache        (show cache location and size)
+  npx angular-compat-matrix cache clean  (delete the cache)
+  npx angular-compat-matrix ci github    (write a GitHub Actions workflow that runs the matrix)
 
 Options
   --versions <list>      Angular majors to check: 22, 18-22, 20,22. Default: the supported
@@ -63,18 +64,29 @@ Options
   --cwd <dir>            The library's workspace (default: the current folder)
   --verbose              Show commands run and full build/install output for failures
   -h, --help             This help
-  -v, --version          ng-matrix's version
+  -v, --version          angular-compat-matrix's version
+
+ci github writes ${WORKFLOW_PATH}: a job per Angular
+major, worked out when the workflow runs. It takes the options above that choose what to
+check (--versions, --project, --pm, --cwd...), and:
+  --install <cmd>        How the jobs install the workspace (default: from the lockfile)
+  --command <cmd>        How the jobs run angular-compat-matrix (default: npx, this version)
+  --force                Overwrite an existing workflow
+  --print                Print the workflow instead of writing it
 
 Exit code: 1 when a version inside the peer range fails, 2 when a version couldn't be
 checked at all, 0 otherwise. A version outside the range that fails is a note, not an error.
 `;
 
-function toolVersion(): string {
-  const manifest = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
-  return (JSON.parse(readFileSync(manifest, 'utf8')) as { version: string }).version;
+function toolManifest(): { version: string; engines: { node: string } } {
+  return JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8'));
 }
 
-/** A problem ng-matrix explains and stops on, with exit code 2. */
+function toolVersion(): string {
+  return toolManifest().version;
+}
+
+/** A problem angular-compat-matrix explains and stops on, with exit code 2. */
 class Stop extends Error {
   readonly lines: string[];
   constructor(message: string, lines: string[] = []) {
@@ -89,19 +101,19 @@ function fail(message: string, lines: string[] = []): never {
 
 function explain(error: unknown): number {
   if (error instanceof Stop || error instanceof LibraryError) {
-    process.stderr.write(`ng-matrix: ${error.message}\n${error.lines.map((l) => `  ${l}\n`).join('')}`);
+    process.stderr.write(`angular-compat-matrix: ${error.message}\n${error.lines.map((l) => `  ${l}\n`).join('')}`);
   } else if (error instanceof RegistryError) {
-    process.stderr.write(`ng-matrix: ${error.message}\n`);
+    process.stderr.write(`angular-compat-matrix: ${error.message}\n`);
   } else if (String((error as { code?: string }).code).startsWith('ERR_PARSE_ARGS')) {
-    process.stderr.write(`ng-matrix: ${(error as Error).message}. See --help.\n`);
+    process.stderr.write(`angular-compat-matrix: ${(error as Error).message}. See --help.\n`);
   } else {
-    process.stderr.write(`ng-matrix: unexpected error\n${(error as Error).stack ?? String(error)}\n`);
+    process.stderr.write(`angular-compat-matrix: unexpected error\n${(error as Error).stack ?? String(error)}\n`);
   }
   return 2;
 }
 
-export async function main(argv: string[]): Promise<number> {
-  const { values, positionals } = parseArgs({
+function parse(argv: string[]) {
+  return parseArgs({
     args: argv,
     allowPositionals: true,
     options: {
@@ -125,10 +137,20 @@ export async function main(argv: string[]): Promise<number> {
       offline: { type: 'boolean', default: false },
       cwd: { type: 'string' },
       verbose: { type: 'boolean', default: false },
+      install: { type: 'string' },
+      command: { type: 'string' },
+      force: { type: 'boolean', default: false },
+      print: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
       version: { type: 'boolean', short: 'v', default: false },
     },
   });
+}
+
+type Values = ReturnType<typeof parse>['values'];
+
+export async function main(argv: string[]): Promise<number> {
+  const { values, positionals } = parse(argv);
   if (values.help) {
     process.stdout.write(HELP);
     return 0;
@@ -150,9 +172,9 @@ export async function main(argv: string[]): Promise<number> {
       process.stdout.write(`Cleaned cache at ${cacheDir}\n`);
       return 0;
     }
-    fail(`Unknown cache command "ng-matrix cache ${sub}". See --help.`);
+    fail(`Unknown cache command "angular-compat-matrix cache ${sub}". See --help.`);
   }
-  if (positionals[0] === 'ci') fail('`ng-matrix ci github` is planned for v0.2.');
+  if (positionals[0] === 'ci') return ci(positionals[1], positionals.slice(2), values);
   if (positionals.length) fail(`Unknown argument "${positionals[0]}". See --help.`);
 
   const format = values.json ? 'json' : values.format!;
@@ -168,13 +190,13 @@ export async function main(argv: string[]): Promise<number> {
     setStepTimeout(minutes * 60_000);
   }
   const progress = new Progress(format !== 'json');
-  const log = (line: string) => progress.log(`[ng-matrix] ${line}`);
+  const log = (line: string) => progress.log(`[angular-compat-matrix] ${line}`);
 
   const cacheDir = defaultCacheDir();
   const registry = new Registry({
     cacheDir,
     offline: values.offline,
-    recordedDir: process.env.NG_MATRIX_RECORDED_REGISTRY,
+    recordedDir: process.env.ANGULAR_COMPAT_MATRIX_RECORDED_REGISTRY,
   });
   // Leftovers from runs that were killed before they could clean up.
   sweepWorkDirs();
@@ -268,6 +290,8 @@ export async function main(argv: string[]): Promise<number> {
     };
     const render = format === 'json' ? (r: Report) => renderJson(r, values.verbose) : format === 'markdown' ? renderMarkdown : (r: Report) => renderTerminal(r, values.verbose);
     process.stdout.write((format === 'terminal' ? '\n' : '') + render(report));
+    // On stderr, so they don't end up in a JSON or Markdown file; the runner reads both streams.
+    if (process.env.GITHUB_ACTIONS === 'true') for (const line of annotations(report)) process.stderr.write(`${line}\n`);
     return report.exitCode;
   } catch (error) {
     return explain(error);
@@ -276,6 +300,103 @@ export async function main(argv: string[]): Promise<number> {
     stopListening();
     if (!values.keep) removeDir(workDir);
   }
+}
+
+/** `ci github` writes the workflow; `ci plan` and `ci summary` are what the workflow runs. */
+async function ci(sub: string | undefined, files: string[], values: Values): Promise<number> {
+  try {
+    if (values.tarball || values.package) fail('ci checks the library in this repository; --tarball and --package don\'t apply.');
+    const cwd = resolve(values.cwd ?? process.cwd());
+    if (sub === 'github') {
+      detectBuild({ cwd, project: values.project, build: values.build });
+      const target = resolve(WORKFLOW_PATH);
+      if (!values.print && existsSync(target) && !values.force) fail(`${WORKFLOW_PATH} already exists. Pass --force to overwrite it, or --print to see it.`);
+      const pass = (name: string, value: string | boolean | undefined) =>
+        value === undefined || value === false ? [] : value === true ? [`--${name}`] : [`--${name}`, value];
+      const args = [
+        // Relative to the repository root, with forward slashes: the jobs run on Linux.
+        ...pass('cwd', values.cwd && (relative(process.cwd(), cwd).split(sep).join('/') || '.')),
+        ...pass('project', values.project),
+        ...pass('pm', values.pm),
+        ...pass('consumer', values.consumer),
+        ...pass('build', values.build),
+        ...pass('tests', values.tests),
+        ...pass('test-command', values['test-command']),
+        ...pass('allow-scripts', values['allow-scripts']),
+        ...pass('step-timeout', values['step-timeout']),
+      ];
+      const pnpm = pnpmSetup(process.cwd());
+      const workflow = githubWorkflow({
+        command: values.command ?? `npx --yes angular-compat-matrix@${toolVersion()}`,
+        args,
+        planArgs: [...pass('versions', values.versions), ...pass('next', values.next)],
+        install: values.install ?? (pnpm !== undefined ? 'pnpm install --frozen-lockfile' : existsSync('package-lock.json') ? 'npm ci' : 'npm install'),
+        installForPlan: Boolean(values.command),
+        pnpm,
+      });
+      if (values.print) {
+        process.stdout.write(workflow);
+        return 0;
+      }
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, workflow);
+      process.stdout.write(`Wrote ${WORKFLOW_PATH}. Commit it; it runs on pushes to main, pull requests and weekly.\n`);
+      return 0;
+    }
+    if (sub === 'plan') {
+      const registry = new Registry({ cacheDir: defaultCacheDir(), offline: values.offline, recordedDir: process.env.ANGULAR_COMPAT_MATRIX_RECORDED_REGISTRY });
+      const now = new Date();
+      const sources = await loadVersionSources(registry);
+      const majors = values.versions
+        ? parseVersionList(values.versions)
+        : defaultMajors(sources.core, sourceManifest({ cwd, project: values.project, build: values.build }).peerDependencies?.['@angular/core'], now);
+      const published = new Set(majorsOf(sources.core));
+      for (const major of majors) if (!published.has(major)) fail(`Angular ${major} isn't published on npm.`);
+      const angular = majors.map((major) => describeMajor(sources, major, now));
+      const next = values.next ? nextVersion(sources.core) : undefined;
+      if (next) angular.push(describeMajor(sources, semver.major(next), now, next));
+      process.stdout.write(`${JSON.stringify(planMatrix(angular, { version: toolVersion(), node: toolManifest().engines.node }))}\n`);
+      return 0;
+    }
+    if (sub === 'summary') {
+      if (!files.length) fail('ci summary needs the JSON reports to join.');
+      const reports: Report[] = [];
+      const unreadable: string[] = [];
+      for (const file of files) {
+        try {
+          const report = JSON.parse(readFileSync(file, 'utf8')) as Report;
+          if (!Array.isArray(report.versions)) throw new Error('not a report');
+          reports.push(report);
+        } catch {
+          unreadable.push(file);
+        }
+      }
+      if (!reports.length) fail(`None of these is a report: ${unreadable.join(', ')}.`);
+      let merged: ReturnType<typeof mergeReports>;
+      try {
+        merged = mergeReports(reports, unreadable);
+      } catch (error) {
+        fail((error as Error).message);
+      }
+      const { report, notes } = merged;
+      process.stdout.write(renderMarkdown(report) + notes.map((note) => `- ⚠️ ${note}\n`).join(''));
+      return report.exitCode;
+    }
+    fail(sub ? `Unknown ci command "angular-compat-matrix ci ${sub}". See --help.` : 'Which CI? `angular-compat-matrix ci github`. See --help.');
+  } catch (error) {
+    return explain(error);
+  }
+}
+
+/**
+ * For a pnpm workspace, the pnpm/action-setup `version`: '' when package.json's `packageManager`
+ * names pnpm (the action reads it, and refuses a second version), else the pnpm this tool pins.
+ */
+function pnpmSetup(root: string): string | undefined {
+  if (!existsSync(join(root, 'pnpm-lock.yaml'))) return undefined;
+  const manifest = join(root, 'package.json');
+  const declared = existsSync(manifest) ? (JSON.parse(readFileSync(manifest, 'utf8')) as { packageManager?: string }).packageManager : undefined;
+  return declared?.startsWith('pnpm@') ? '' : PNPM_VERSION;
 }
 
 main(process.argv.slice(2)).then(

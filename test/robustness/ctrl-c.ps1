@@ -1,4 +1,4 @@
-# Windows half of interrupt.ts: starts ng-matrix in a console of its own, waits until its log shows
+# Windows half of interrupt.ts: starts angular-compat-matrix in a console of its own, waits until its log shows
 # the step to interrupt, presses Ctrl+Break in that console, and prints the exit code. (A process
 # started in its own process group has Ctrl+C disabled by Windows; Ctrl+Break reaches the same handler.)
 param(

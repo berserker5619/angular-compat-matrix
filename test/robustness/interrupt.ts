@@ -14,14 +14,14 @@ const cli = join(root, 'dist', 'cli.js');
 const fixture = join(root, 'fixtures', 'libs', 'healthy');
 const windows = process.platform === 'win32';
 
-/** Processes whose command line points into an ng-matrix work folder. */
+/** Processes whose command line points into an angular-compat-matrix work folder. */
 function leftoverProcesses(): string[] {
   const out = windows
     ? execFileSync('powershell', ['-NoProfile', '-Command', 'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.CommandLine)" }'], {
         encoding: 'utf8',
       })
     : execFileSync('ps', ['-eo', 'pid,args'], { encoding: 'utf8' });
-  return out.split(/\r?\n/).filter((line) => /ng-matrix-[A-Za-z0-9]{6}[\\/]/.test(line));
+  return out.split(/\r?\n/).filter((line) => /angular-compat-matrix-[A-Za-z0-9]{6}[\\/]/.test(line));
 }
 
 async function interruptAt(step: string): Promise<{ code: number | null; log: string }> {
@@ -59,7 +59,7 @@ for (const [label, step] of [
 ] as const) {
   const { code, log } = await interruptAt(step);
   assert.equal(code, 130, `Ctrl+C during ${label}: exit code\n${log}`);
-  // The run names its work folder as it stops; other ng-matrix runs on the machine are left alone.
+  // The run names its work folder as it stops; other angular-compat-matrix runs on the machine are left alone.
   const workDir = /Interrupted \(SIG(?:INT|BREAK)\): stopping, then removing (.+)\.\s*$/m.exec(log)?.[1];
   assert.ok(workDir, `Ctrl+C during ${label}: the run said so\n${log}`);
   assert.ok(!existsSync(workDir), `Ctrl+C during ${label}: ${workDir} left behind`);

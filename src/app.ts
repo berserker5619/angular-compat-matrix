@@ -85,7 +85,7 @@ export function appProject(appDir: string): AppProject {
 }
 
 /**
- * Points the build at ng-matrix's own tsconfig (and, for a generated app, its own main file),
+ * Points the build at angular-compat-matrix's own tsconfig (and, for a generated app, its own main file),
  * and removes the production budgets so a large component kit doesn't fail the build on size.
  */
 export function configureBuild(appDir: string, mainFile: string | undefined): AppProject {

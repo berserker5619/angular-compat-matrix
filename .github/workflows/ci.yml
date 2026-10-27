@@ -17,8 +17,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # One known place for the Angular CLIs and pnpm that ng-matrix downloads, on every OS.
-  NG_MATRIX_CACHE: ${{ github.workspace }}/../ng-matrix-cache
+  # One known place for the Angular CLIs and pnpm that angular-compat-matrix downloads, on every OS.
+  ANGULAR_COMPAT_MATRIX_CACHE: ${{ github.workspace }}/../angular-compat-matrix-cache
 
 jobs:
   unit:
@@ -38,6 +38,34 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  workflows:
+    name: Lint workflows (actionlint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Generate workflows the way users would (npm, pnpm, with options)
+        run: |
+          out="$RUNNER_TEMP/generated"
+          mkdir -p "$out" "$RUNNER_TEMP/pnpm-repo"
+          node dist/cli.js ci github --print --cwd fixtures/libs/healthy > "$out/npm.yml"
+          node dist/cli.js ci github --print --cwd fixtures/libs/healthy --versions 18-22 --next --tests \
+            --build "npx ng build my-lib" --allow-scripts --step-timeout 30 > "$out/options.yml"
+          cd "$RUNNER_TEMP/pnpm-repo"
+          echo '{}' > ng-package.json
+          echo '{ "name": "my-lib" }' > package.json
+          touch pnpm-lock.yaml
+          node "$GITHUB_WORKSPACE/dist/cli.js" ci github --print > "$out/pnpm.yml"
+      - name: Download actionlint
+        run: bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+      - name: Lint this repo's workflows and the generated ones
+        run: ./actionlint -color .github/workflows/*.yml "$RUNNER_TEMP"/generated/*.yml
 
   cases:
     name: List fixture cases
@@ -74,12 +102,12 @@ jobs:
       - run: npm ci
         working-directory: fixtures
       - run: npm run build
-      - name: Cache Angular CLIs and pnpm that ng-matrix downloads
+      - name: Cache Angular CLIs and pnpm that angular-compat-matrix downloads
         uses: actions/cache@v6
         with:
-          path: ${{ env.NG_MATRIX_CACHE }}/tools
-          key: ng-matrix-tools-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: ng-matrix-tools-${{ runner.os }}-
+          path: ${{ env.ANGULAR_COMPAT_MATRIX_CACHE }}/tools
+          key: angular-compat-matrix-tools-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: angular-compat-matrix-tools-${{ runner.os }}-
       - run: node test/fixtures/run.ts ${{ matrix.case }}
 
   # Enough on macOS and Windows to prove installs, builds, the pnpm shim and the install-script
@@ -107,12 +135,12 @@ jobs:
       - run: npm ci
         working-directory: fixtures
       - run: npm run build
-      - name: Cache Angular CLIs and pnpm that ng-matrix downloads
+      - name: Cache Angular CLIs and pnpm that angular-compat-matrix downloads
         uses: actions/cache@v6
         with:
-          path: ${{ env.NG_MATRIX_CACHE }}/tools
-          key: ng-matrix-tools-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: ng-matrix-tools-${{ runner.os }}-
+          path: ${{ env.ANGULAR_COMPAT_MATRIX_CACHE }}/tools
+          key: angular-compat-matrix-tools-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: angular-compat-matrix-tools-${{ runner.os }}-
       - run: node test/fixtures/run.ts ${{ matrix.case }}
 
   robustness:

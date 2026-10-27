@@ -38,6 +38,8 @@ interface BuildPlan {
   kind: 'angular-cli' | 'ng-packagr';
   label: string;
   dest: string;
+  /** The library's own package.json, next to its ng-package.json. */
+  manifest: string;
   run: () => Promise<{ code: number; output: string }>;
 }
 
@@ -91,11 +93,13 @@ export function detectBuild(options: LibraryOptions): BuildPlan {
     if (!project || project.projectType !== 'library') throw new LibraryError(`No library project named "${name}" in angular.json.`);
     const ngPackage = project.architect?.build?.options?.project ?? join(project.root ?? '', 'ng-package.json');
     const dest = ngPackageDest(resolve(cwd, ngPackage));
-    if (options.build) return { kind: 'angular-cli', label: options.build, dest, run: shell(options.build) };
+    const manifest = join(dirname(resolve(cwd, ngPackage)), 'package.json');
+    if (options.build) return { kind: 'angular-cli', label: options.build, dest, manifest, run: shell(options.build) };
     return {
       kind: 'angular-cli',
       label: `ng build ${name} --configuration production`,
       dest,
+      manifest,
       run: () =>
         exec(process.execPath, [resolveBin(cwd, '@angular/cli', 'ng'), 'build', name, '--configuration', 'production'], {
           cwd,
@@ -110,22 +114,24 @@ export function detectBuild(options: LibraryOptions): BuildPlan {
   });
   if (ngPackage) {
     const dest = ngPackageDest(ngPackage);
-    if (options.build) return { kind: 'ng-packagr', label: options.build, dest, run: shell(options.build) };
-    const manifest = existsSync(join(cwd, 'package.json')) ? readJson<LibraryManifest>(join(cwd, 'package.json')) : undefined;
+    const manifestPath = join(cwd, 'package.json');
+    if (options.build) return { kind: 'ng-packagr', label: options.build, dest, manifest: manifestPath, run: shell(options.build) };
+    const manifest = existsSync(manifestPath) ? readJson<LibraryManifest>(manifestPath) : undefined;
     if (manifest?.scripts?.build) {
-      return { kind: 'ng-packagr', label: 'npm run build', dest, run: () => npm(['run', 'build'], { cwd }) };
+      return { kind: 'ng-packagr', label: 'npm run build', dest, manifest: manifestPath, run: () => npm(['run', 'build'], { cwd }) };
     }
     return {
       kind: 'ng-packagr',
       label: 'ng-packagr -p ng-package.json',
       dest,
+      manifest: manifestPath,
       run: () => exec(process.execPath, [resolveBin(cwd, 'ng-packagr', 'ng-packagr'), '-p', ngPackage], { cwd }),
     };
   }
 
   if (existsSync(join(cwd, 'nx.json'))) {
     throw new LibraryError(
-      'Nx workspaces are planned for v0.2. For now, run ng-matrix from the library folder (the one with ng-package.json) with --build "npx nx build <lib>".',
+      'Nx workspaces are planned for v0.2. For now, run angular-compat-matrix from the library folder (the one with ng-package.json) with --build "npx nx build <lib>".',
     );
   }
   throw new LibraryError(
@@ -135,7 +141,7 @@ export function detectBuild(options: LibraryOptions): BuildPlan {
 
 /**
  * Full compilation output must never be published: ng-packagr guards that with a `prepublishOnly`
- * script, which `npm pack` doesn't run. So ng-matrix checks for it itself.
+ * script, which `npm pack` doesn't run. So angular-compat-matrix checks for it itself.
  */
 export function fullCompilationEvidence(dir: string): string | undefined {
   const manifestPath = join(dir, 'package.json');
@@ -230,4 +236,11 @@ export async function prepareLibrary(options: LibraryOptions, workDir: string, l
     if (full) throw new LibraryError(`This package was built in full compilation mode (${full}); Angular apps can't use it reliably.`);
   }
   return { manifest: readJson<LibraryManifest>(join(dir, 'package.json')), tarball, dir, source };
+}
+
+/** The library's package.json as written in the workspace, without building it: enough to read its peer range. */
+export function sourceManifest(options: LibraryOptions): LibraryManifest {
+  const { manifest } = detectBuild(options);
+  if (!existsSync(manifest)) throw new LibraryError(`The library has no package.json at ${manifest}.`);
+  return readJson<LibraryManifest>(manifest);
 }
