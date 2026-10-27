@@ -1,7 +1,7 @@
 import semver from 'semver';
 import type { Packument, Registry, VersionMeta } from './registry.ts';
 
-/** Everything ng-matrix needs to know about one Angular major, all read from the registry. */
+/** Everything angular-compat-matrix needs to know about one Angular major, all read from the registry. */
 export interface AngularMajor {
   major: number;
   /** The `@angular/core` version an app of this major gets: the latest patch, or the `next` tag. */

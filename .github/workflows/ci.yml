@@ -17,8 +17,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # One known place for the Angular CLIs and pnpm that ng-matrix downloads, on every OS.
-  NG_MATRIX_CACHE: ${{ github.workspace }}/../ng-matrix-cache
+  # One known place for the Angular CLIs and pnpm that angular-compat-matrix downloads, on every OS.
+  ANGULAR_COMPAT_MATRIX_CACHE: ${{ github.workspace }}/../angular-compat-matrix-cache
 
 jobs:
   unit:
@@ -74,12 +74,12 @@ jobs:
       - run: npm ci
         working-directory: fixtures
       - run: npm run build
-      - name: Cache Angular CLIs and pnpm that ng-matrix downloads
+      - name: Cache Angular CLIs and pnpm that angular-compat-matrix downloads
         uses: actions/cache@v6
         with:
-          path: ${{ env.NG_MATRIX_CACHE }}/tools
-          key: ng-matrix-tools-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: ng-matrix-tools-${{ runner.os }}-
+          path: ${{ env.ANGULAR_COMPAT_MATRIX_CACHE }}/tools
+          key: angular-compat-matrix-tools-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: angular-compat-matrix-tools-${{ runner.os }}-
       - run: node test/fixtures/run.ts ${{ matrix.case }}
 
   # Enough on macOS and Windows to prove installs, builds, the pnpm shim and the install-script
@@ -107,12 +107,12 @@ jobs:
       - run: npm ci
         working-directory: fixtures
       - run: npm run build
-      - name: Cache Angular CLIs and pnpm that ng-matrix downloads
+      - name: Cache Angular CLIs and pnpm that angular-compat-matrix downloads
         uses: actions/cache@v6
         with:
-          path: ${{ env.NG_MATRIX_CACHE }}/tools
-          key: ng-matrix-tools-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: ng-matrix-tools-${{ runner.os }}-
+          path: ${{ env.ANGULAR_COMPAT_MATRIX_CACHE }}/tools
+          key: angular-compat-matrix-tools-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: angular-compat-matrix-tools-${{ runner.os }}-
       - run: node test/fixtures/run.ts ${{ matrix.case }}
 
   robustness:

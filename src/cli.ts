@@ -27,16 +27,15 @@ import {
   parseVersionList,
 } from './versions.ts';
 
-const HELP = `ng-matrix: which Angular versions does your published library really work with?
+const HELP = `angular-compat-matrix: which Angular versions does your published library really work with?
 
 It builds and packs your library, installs the tarball into a fresh app for each Angular
 major (made with that major's own CLI), builds it, and reports a matrix.
 
 Usage
   npx angular-compat-matrix [options]
-  ng-matrix [options]                  (once installed)
-  ng-matrix cache                      (show cache location and size)
-  ng-matrix cache clean                (delete the cache)
+  npx angular-compat-matrix cache        (show cache location and size)
+  npx angular-compat-matrix cache clean  (delete the cache)
 
 Options
   --versions <list>      Angular majors to check: 22, 18-22, 20,22. Default: the supported
@@ -63,7 +62,7 @@ Options
   --cwd <dir>            The library's workspace (default: the current folder)
   --verbose              Show commands run and full build/install output for failures
   -h, --help             This help
-  -v, --version          ng-matrix's version
+  -v, --version          angular-compat-matrix's version
 
 Exit code: 1 when a version inside the peer range fails, 2 when a version couldn't be
 checked at all, 0 otherwise. A version outside the range that fails is a note, not an error.
@@ -74,7 +73,7 @@ function toolVersion(): string {
   return (JSON.parse(readFileSync(manifest, 'utf8')) as { version: string }).version;
 }
 
-/** A problem ng-matrix explains and stops on, with exit code 2. */
+/** A problem angular-compat-matrix explains and stops on, with exit code 2. */
 class Stop extends Error {
   readonly lines: string[];
   constructor(message: string, lines: string[] = []) {
@@ -89,13 +88,13 @@ function fail(message: string, lines: string[] = []): never {
 
 function explain(error: unknown): number {
   if (error instanceof Stop || error instanceof LibraryError) {
-    process.stderr.write(`ng-matrix: ${error.message}\n${error.lines.map((l) => `  ${l}\n`).join('')}`);
+    process.stderr.write(`angular-compat-matrix: ${error.message}\n${error.lines.map((l) => `  ${l}\n`).join('')}`);
   } else if (error instanceof RegistryError) {
-    process.stderr.write(`ng-matrix: ${error.message}\n`);
+    process.stderr.write(`angular-compat-matrix: ${error.message}\n`);
   } else if (String((error as { code?: string }).code).startsWith('ERR_PARSE_ARGS')) {
-    process.stderr.write(`ng-matrix: ${(error as Error).message}. See --help.\n`);
+    process.stderr.write(`angular-compat-matrix: ${(error as Error).message}. See --help.\n`);
   } else {
-    process.stderr.write(`ng-matrix: unexpected error\n${(error as Error).stack ?? String(error)}\n`);
+    process.stderr.write(`angular-compat-matrix: unexpected error\n${(error as Error).stack ?? String(error)}\n`);
   }
   return 2;
 }
@@ -150,9 +149,9 @@ export async function main(argv: string[]): Promise<number> {
       process.stdout.write(`Cleaned cache at ${cacheDir}\n`);
       return 0;
     }
-    fail(`Unknown cache command "ng-matrix cache ${sub}". See --help.`);
+    fail(`Unknown cache command "angular-compat-matrix cache ${sub}". See --help.`);
   }
-  if (positionals[0] === 'ci') fail('`ng-matrix ci github` is planned for v0.2.');
+  if (positionals[0] === 'ci') fail('`angular-compat-matrix ci github` is planned for v0.2.');
   if (positionals.length) fail(`Unknown argument "${positionals[0]}". See --help.`);
 
   const format = values.json ? 'json' : values.format!;
@@ -168,13 +167,13 @@ export async function main(argv: string[]): Promise<number> {
     setStepTimeout(minutes * 60_000);
   }
   const progress = new Progress(format !== 'json');
-  const log = (line: string) => progress.log(`[ng-matrix] ${line}`);
+  const log = (line: string) => progress.log(`[angular-compat-matrix] ${line}`);
 
   const cacheDir = defaultCacheDir();
   const registry = new Registry({
     cacheDir,
     offline: values.offline,
-    recordedDir: process.env.NG_MATRIX_RECORDED_REGISTRY,
+    recordedDir: process.env.ANGULAR_COMPAT_MATRIX_RECORDED_REGISTRY,
   });
   // Leftovers from runs that were killed before they could clean up.
   sweepWorkDirs();

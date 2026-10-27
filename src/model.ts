@@ -41,7 +41,7 @@ export interface VersionReport {
   /** The `@angular/*` peers whose ranges leave this version out. */
   peerMisses: Array<{ name: string; range: string; version: string }>;
   checks: Record<CheckName, CheckResult>;
-  /** ng-matrix itself couldn't set this version up (ng new failed, say): not the package's fault. */
+  /** angular-compat-matrix itself couldn't set this version up (ng new failed, say): not the package's fault. */
   setupError?: string;
   /** Packages in the app whose install scripts didn't run (the default; --allow-scripts runs them). */
   skippedInstallScripts?: string[];

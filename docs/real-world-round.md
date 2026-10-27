@@ -1,6 +1,6 @@
 # Real-world round, 26 October 2026
 
-ng-matrix 0.1 was run with `--package` against the 50 most-downloaded Angular community libraries on the supported majors (20, 21 and 22: `--versions 20-22`, npm 11, Node 24.19, with install-script safety active). For each failure, the question was whether it's a real problem in the library or a false failure in ng-matrix. False failures were fixed, each with a regression test. This page lists what the libraries really do.
+angular-compat-matrix 0.1 was run with `--package` against the 50 most-downloaded Angular community libraries on the supported majors (20, 21 and 22: `--versions 20-22`, npm 11, Node 24.19, with install-script safety active). For each failure, the question was whether it's a real problem in the library or a false failure in angular-compat-matrix. False failures were fixed, each with a regression test. This page lists what the libraries really do.
 
 ## Summary
 
@@ -66,24 +66,24 @@ ng-matrix 0.1 was run with `--package` against the 50 most-downloaded Angular co
 
 ✅ every check passed and the range claims it. ⚠️ every check passed, but the peer range leaves the version out. ❌ a check failed.
 
-"Works" means what ng-matrix checks: the published package installs, links and builds in a fresh app, in production mode and with strict templates and `skipLibCheck: false`, with every public export used. It says nothing about runtime behaviour in a browser.
+"Works" means what angular-compat-matrix checks: the published package installs, links and builds in a fresh app, in production mode and with strict templates and `skipLibCheck: false`, with every public export used. It says nothing about runtime behaviour in a browser.
 
 ## Real findings
 
 ### Missing undeclared dependencies in published packages (primeng, ng-zorro-antd, ngx-guided-tour)
-- **primeng 22.1.4**: Secondary entry point `primeng/chart` imports `chart.js/auto`, which is neither a declared dependency nor peer dependency. When `primeng/chart` is omitted, the core library AOT builds cleanly, and ng-matrix reports the warning finding: `entry point primeng/chart imports chart.js, which isn't declared in dependencies or peers`.
+- **primeng 22.1.4**: Secondary entry point `primeng/chart` imports `chart.js/auto`, which is neither a declared dependency nor peer dependency. When `primeng/chart` is omitted, the core library AOT builds cleanly, and angular-compat-matrix reports the warning finding: `entry point primeng/chart imports chart.js, which isn't declared in dependencies or peers`.
 - **ng-zorro-antd 22.1.2**: Secondary entry points `ng-zorro-antd/cron-expression` and `ng-zorro-antd/graph` import `cron-parser`, `d3-shape`, and `d3-drag`, none of which are declared dependencies of ng-zorro-antd. When those entry points are omitted, the rest of the library AOT builds cleanly with warning findings reported.
-- **ngx-guided-tour 2.0.1**: Imports `lodash` in its main entry point (`"."`), which is not declared in dependencies or peers. Because omitting the main entry point would leave nothing to test (and every consumer of ngx-guided-tour requires `lodash`), ng-matrix does not omit it and fails the AOT check with: `"ngx-guided-tour imports lodash, which isn't declared in dependencies or peers. Every user of ngx-guided-tour needs lodash installed."` Comes out as FAIL (aot) across Angular 20, 21, and 22.
+- **ngx-guided-tour 2.0.1**: Imports `lodash` in its main entry point (`"."`), which is not declared in dependencies or peers. Because omitting the main entry point would leave nothing to test (and every consumer of ngx-guided-tour requires `lodash`), angular-compat-matrix does not omit it and fails the AOT check with: `"ngx-guided-tour imports lodash, which isn't declared in dependencies or peers. Every user of ngx-guided-tour needs lodash installed."` Comes out as FAIL (aot) across Angular 20, 21, and 22.
 
 ### Angular version typing & API mismatches
 - **@ngneat/overview 8.1.0**: Peer range is `>=21`. Fails strict typecheck on Angular 20 with `TS2459: Module '"@angular/core"' declares 'DirectiveWithBindings' locally, but it is not exported`.
 - **@kolkov/ngx-gallery 2.0.1**: Fails AOT on Angular 22 because it imports `HammerGestureConfig` and `HAMMER_GESTURE_CONFIG` from `@angular/platform-browser`, which were removed in Angular 22.
-- **ngx-monaco-editor-v2 22.0.5**: Angular linker crashes on Angular 20 (`Unsupported change detection strategy: ChangeDetectionStrategy.Eager`) because `ChangeDetectionStrategy.Eager` was introduced in Angular 21, yet the package claimed a `minVersion` of `17.2.0`. ng-matrix correctly flagged `advisory: true` for the partial compilation check and caught the incompatibility during AOT build.
+- **ngx-monaco-editor-v2 22.0.5**: Angular linker crashes on Angular 20 (`Unsupported change detection strategy: ChangeDetectionStrategy.Eager`) because `ChangeDetectionStrategy.Eager` was introduced in Angular 21, yet the package claimed a `minVersion` of `17.2.0`. angular-compat-matrix correctly flagged `advisory: true` for the partial compilation check and caught the incompatibility during AOT build.
 - **ngx-bootstrap 22.0.0**: Compiled with Angular 22 emitting `ChangeDetectionStrategy.Eager`, causing Angular 20 linker to crash (`Unsupported change detection strategy`). However, it builds and type-checks cleanly on both Angular 21 and 22.
 - **ngx-intl-tel-input 17.0.0**: Declares peer dependency on `ngx-bootstrap >= 12.0.0`. On Angular 20, picking `ngx-bootstrap@20.0.2` fails AOT because `ngx-bootstrap` imports `@angular/animations`, which wasn't part of `ngx-intl-tel-input`'s direct peers.
 
 ### Library typings errors with skipLibCheck: false (@coreui/angular 5.7.37, primeng 22.1.4, ng-zorro-antd 22.1.2)
-When the strict build fails only because of errors inside `node_modules` declaration (`.d.ts`) files under `skipLibCheck: false`, ng-matrix marks the strict check as passed with a warning finding (`"library typings have errors with skipLibCheck: false"`), ensuring library typing oversights do not mark the version broken or fail the exit code.
+When the strict build fails only because of errors inside `node_modules` declaration (`.d.ts`) files under `skipLibCheck: false`, angular-compat-matrix marks the strict check as passed with a warning finding (`"library typings have errors with skipLibCheck: false"`), ensuring library typing oversights do not mark the version broken or fail the exit code.
 - **@coreui/angular 5.7.37**: Typings reference `node_modules/rxjs/dist/types` directly (`TS2307: Cannot find module 'node_modules/rxjs/dist/types'`). Strict check passes with warning; exit code: 0.
 - **primeng 22.1.4**: Typings reference `NodeJS.Timeout` without `@types/node`, and `chart.js` typings. Strict check passes with warning; exit code: 0.
 - **ng-zorro-antd 22.1.2**: Typings reference `monaco-editor` in `code-editor.d.ts`. Strict check passes with warning; exit code: 0.
@@ -91,11 +91,11 @@ When the strict build fails only because of errors inside `node_modules` declara
 ### Tight sibling peer constraints (@ngrx/effects, @ngrx/entity, @ngrx/router-store)
 - `@ngrx/effects@22.0.1` requires `@ngrx/store` strictly at `"22.0.1"`. In an Angular 20 app, npm peer resolution resolves the Angular 20 ecosystem, causing a peer mismatch against the strict 22.0.1 requirement.
 
-## False failures in ng-matrix, fixed
+## False failures in angular-compat-matrix, fixed
 
-| Library | What failed | Why it was ng-matrix | Fix | Regression test |
+| Library | What failed | Why it was angular-compat-matrix | Fix | Regression test |
 | --- | --- | --- | --- | --- |
-| angular-calendar | AOT build on 20–22: `Could not resolve "date-fns"` | date-fns and moment are optional peers, and ng-matrix skipped optional peers. The smoke app imports every entry point, including the date-fns adapter, which needs date-fns, just as a user of that adapter installs it | Optional peers are installed; they still don't count toward what the range claims | `test/unit/peers.test.ts` (installs optional peers, but they claim nothing); fixture case `real-angular-calendar` |
+| angular-calendar | AOT build on 20–22: `Could not resolve "date-fns"` | date-fns and moment are optional peers, and angular-compat-matrix skipped optional peers. The smoke app imports every entry point, including the date-fns adapter, which needs date-fns, just as a user of that adapter installs it | Optional peers are installed; they still don't count toward what the range claims | `test/unit/peers.test.ts` (installs optional peers, but they claim nothing); fixture case `real-angular-calendar` |
 | ngx-toastr | AOT build on 22: `NG8023: Multiple components match node with tagname div: 'ToastBase', 'Toast'` | Both components use the selector `[toast-component]`. The smoke app used every export in one template, so one element matched both. No app imports both into one template; Angular 22 now reports it at compile time | Each standalone declarable, pipe and NgModule gets a small component of its own, as an app would use it | `test/unit/smoke.test.ts` (never puts two exports with the same selector in one template); fixture case `real-ngx-toastr` |
 | ngx-bootstrap | Strict build on 21 & 22: `TS2322: Type 'string' is not assignable to type 'boolean'` on `<div collapse></div>` | Smoke app wrote bare attributes for selector inputs (`collapse`), passing empty string `""` which fails strict templates for strictly `boolean` inputs | Smoke app only writes bare attributes if the input's write type accepts string/any/unknown or `""`; otherwise binds with `[prop]="v..."` | `test/unit/smoke.test.ts` (binds strictly boolean inputs); fixture case `strict-attr` |
 | primeng, ng-zorro-antd, ngx-guided-tour | Secondary entry points failed AOT: `Could not resolve "chart.js/auto"`, `cron-parser`, `d3-*` | Secondary entry points imported undeclared packages. Real users only install those extras when using those components. Main entry points (`"."`) must never be omitted | Secondary entry points are omitted from smoke build with warning findings. If the undeclared package is in the main entry point or leaves nothing to test, AOT fails | `test/unit/build.test.ts`, `test/unit/report.test.ts`, fixture `undeclared-main` |

@@ -14,7 +14,7 @@ function works(version: VersionReport): boolean {
   return !version.setupError && !firstFailure(version);
 }
 
-/** CI goes red only for broken promises (2 means ng-matrix itself couldn't check a version). */
+/** CI goes red only for broken promises (2 means angular-compat-matrix itself couldn't check a version). */
 export function exitCode(versions: VersionReport[]): number {
   if (versions.some((v) => v.setupError)) return 2;
   return versions.some((v) => v.claimed === true && firstFailure(v)) ? 1 : 0;
@@ -30,7 +30,7 @@ export function findings(
   for (const version of versions) {
     const m = version.major;
     if (version.setupError) {
-      raw.push({ level: 'error', majors: [m], key: `setup:${version.setupError}`, text: `ng-matrix couldn't set up the app: ${version.setupError}` });
+      raw.push({ level: 'error', majors: [m], key: `setup:${version.setupError}`, text: `angular-compat-matrix couldn't set up the app: ${version.setupError}` });
       continue;
     }
     const failure = firstFailure(version);

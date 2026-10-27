@@ -2,9 +2,9 @@
 
 Which Angular versions does your published library really work with?
 
-Run it with `npx angular-compat-matrix`, or install the package and run `ng-matrix`: both names start the same command.
+Run it with `npx angular-compat-matrix`. Once the package is installed, `angular-compat-matrix` works as a shorter alias for the same command.
 
-ng-matrix builds and packs your Angular library, installs the tarball into a fresh app for each Angular major (created with that major's own CLI), builds it, and reports a compatibility matrix. It tests the exact package your users get, not your local source.
+angular-compat-matrix builds and packs your Angular library, installs the tarball into a fresh app for each Angular major (created with that major's own CLI), builds it, and reports a compatibility matrix. It tests the exact package your users get, not your local source.
 
 ```
 $ npx angular-compat-matrix
@@ -70,7 +70,7 @@ The matrix tests each Angular major in order. A failure on any step marks subseq
 | `✓?` | `✅*` | **Advisory pass:** Passed on `minVersion` alone, but because the library was compiled with a newer Angular major, `minVersion` has been historically unreliable. The build check decides compatibility. |
 | `—` | `—` | **Not run:** Skipped because an earlier check failed. |
 | `·` | `n/a` | **None:** Nothing to check (e.g. no `@angular/*` peer declared). |
-| `!` | `⚠️` | **Setup error:** ng-matrix itself could not set up the app on this machine (e.g. disk full, network timeout). This is not a library failure. |
+| `!` | `⚠️` | **Setup error:** angular-compat-matrix itself could not set up the app on this machine (e.g. disk full, network timeout). This is not a library failure. |
 
 ---
 
@@ -87,12 +87,12 @@ The matrix tests each Angular major in order. A failure on any step marks subseq
 
 ### The Generated Smoke App
 
-When not using `--consumer`, ng-matrix inspects your package typings and generates a standalone smoke app:
+When not using `--consumer`, angular-compat-matrix inspects your package typings and generates a standalone smoke app:
 - Imports all entry points exposed in your `package.json` `exports` map.
 - Instantiates each component, directive, and pipe in its own isolated component.
 - Supplies correctly-typed mock values for required `@Input()` fields.
 - Uses attribute selectors bare (`<div myFlag>`) when they accept booleans or strings, matching real user patterns.
-- Handles undeclared dependencies in secondary entry points: if a secondary entry point (e.g. `my-lib/chart`) fails because an undeclared extra (like `chart.js`) is missing, ng-matrix omits that entry point and warns you rather than failing the whole library. If the package's *main* entry point (`.`) imports an undeclared package, AOT fails immediately with a clear explanation.
+- Handles undeclared dependencies in secondary entry points: if a secondary entry point (e.g. `my-lib/chart`) fails because an undeclared extra (like `chart.js`) is missing, angular-compat-matrix omits that entry point and warns you rather than failing the whole library. If the package's *main* entry point (`.`) imports an undeclared package, AOT fails immediately with a clear explanation.
 
 If your library requires specialized providers, wrappers, or mock services, supply your own example app with `--consumer ./path-to-app`.
 
@@ -100,7 +100,7 @@ If your library requires specialized providers, wrappers, or mock services, supp
 
 ## Install-Script Safety Default & `--allow-scripts`
 
-By default, ng-matrix **blocks arbitrary install scripts** (`preinstall`, `install`, `postinstall`) during `npm` and `pnpm` installations.
+By default, angular-compat-matrix **blocks arbitrary install scripts** (`preinstall`, `install`, `postinstall`) during `npm` and `pnpm` installations.
 
 Only native build tools essential to the Angular toolchain are permitted to run:
 - `esbuild`
@@ -113,38 +113,38 @@ If your library or one of its dependencies requires an install script to compile
 npx angular-compat-matrix --allow-scripts
 ```
 
-If an installation or build fails while scripts were blocked, ng-matrix explicitly lists which packages were skipped in the output findings so you know whether `--allow-scripts` is needed.
+If an installation or build fails while scripts were blocked, angular-compat-matrix explicitly lists which packages were skipped in the output findings so you know whether `--allow-scripts` is needed.
 
 ---
 
 ## Cache Management
 
-ng-matrix caches npm registry metadata and downloaded tools (such as pinned pnpm binaries) to keep runs fast and enable `--offline` usage.
+angular-compat-matrix caches npm registry metadata and downloaded tools (such as pinned pnpm binaries) to keep runs fast and enable `--offline` usage.
 
 ```sh
 # View cache location, disk usage, and file count
-ng-matrix cache
+npx angular-compat-matrix cache
 
 # Clear the cache entirely
-ng-matrix cache clean
+npx angular-compat-matrix cache clean
 ```
 
 ### Cache Locations by OS
 
-- **Linux:** `$XDG_CACHE_HOME/ng-matrix` or `~/.cache/ng-matrix`
-- **macOS:** `~/.cache/ng-matrix` (or `$XDG_CACHE_HOME/ng-matrix`)
-- **Windows:** `%LOCALAPPDATA%\ng-matrix\Cache`
-- **Custom Location:** Set the `NG_MATRIX_CACHE` environment variable to override the default on any OS.
+- **Linux:** `$XDG_CACHE_HOME/angular-compat-matrix` or `~/.cache/angular-compat-matrix`
+- **macOS:** `~/.cache/angular-compat-matrix` (or `$XDG_CACHE_HOME/angular-compat-matrix`)
+- **Windows:** `%LOCALAPPDATA%\angular-compat-matrix\Cache`
+- **Custom Location:** Set the `ANGULAR_COMPAT_MATRIX_CACHE` environment variable to override the default on any OS.
 
 ---
 
 ## Exit Codes
 
-ng-matrix returns standard POSIX exit codes suitable for CI pipelines:
+angular-compat-matrix returns standard POSIX exit codes suitable for CI pipelines:
 
 - **`0` (Success):** Every version claimed by the library's peer dependencies passed all checks. (If the library declares no `@angular/*` peer dependencies, 0 is returned if any checked version passes).
 - **`1` (Broken Promise):** At least one Angular major claimed by your `peerDependencies` failed a check (install, partial, AOT, strict types, or tests).
-- **`2` (Environment / Setup Error):** ng-matrix could not check a version due to machine or network failure (e.g. disk full ENOSPC, network down, step timeout, invalid CLI options).
+- **`2` (Environment / Setup Error):** angular-compat-matrix could not check a version due to machine or network failure (e.g. disk full ENOSPC, network down, step timeout, invalid CLI options).
 
 ---
 
@@ -179,7 +179,7 @@ jobs:
 
 ## JSON Output & Stable Schema Contract
 
-When running with `--json` or `--format json`, ng-matrix outputs structured JSON with a fixed schema contract.
+When running with `--json` or `--format json`, angular-compat-matrix outputs structured JSON with a fixed schema contract.
 
 The top-level field `schemaVersion` is guaranteed. Any future additions or modifications to the JSON shape will increment `schemaVersion`.
 
@@ -325,19 +325,19 @@ Here are the most common real-world incompatibilities identified across popular 
 
 ### 2. Secondary Entry Points with Undeclared Dependencies
 - **Symptom:** A component in a secondary entry point (e.g. `primeng/chart` or `ng-zorro-antd/graph`) fails because `chart.js` or `dagre-d3-es` is not found.
-- **Handling:** ng-matrix omits secondary entry points that fail exclusively because of undeclared packages and flags a warning finding. However, if your **main** entry point (`.`) imports an undeclared package, ng-matrix fails the AOT check because all consumers would experience build failures.
+- **Handling:** angular-compat-matrix omits secondary entry points that fail exclusively because of undeclared packages and flags a warning finding. However, if your **main** entry point (`.`) imports an undeclared package, angular-compat-matrix fails the AOT check because all consumers would experience build failures.
 - **Fix:** Move undeclared packages into `peerDependencies` (or `dependencies` if required).
 
 ### 3. Library Typings Errors under `skipLibCheck: false`
 - **Symptom:** Strict build fails with errors inside declaration files under `node_modules/**/*.d.ts`.
-- **Handling:** When errors are confined strictly to third-party declaration files, ng-matrix marks the strict check as passed with an informational warning finding (`"library typings have errors with skipLibCheck: false"`). It does not fail the version or trigger an exit code 1.
+- **Handling:** When errors are confined strictly to third-party declaration files, angular-compat-matrix marks the strict check as passed with an informational warning finding (`"library typings have errors with skipLibCheck: false"`). It does not fail the version or trigger an exit code 1.
 - **Fix:** Keep your third-party typing dependencies aligned with target TypeScript versions.
 
 ### 4. Disk Full (ENOSPC)
 - **Symptom:** Exit code 2 with `ENOSPC: no space left on device`.
-- **Fix:** Clear temporary build folders and caches using `ng-matrix cache clean`, or point `NG_MATRIX_CACHE` and `TMPDIR`/`TEMP` to a drive with sufficient disk space.
+- **Fix:** Clear temporary build folders and caches using `npx angular-compat-matrix cache clean`, or point `ANGULAR_COMPAT_MATRIX_CACHE` and `TMPDIR`/`TEMP` to a drive with sufficient disk space.
 
-> **Tip for library authors:** If your library accepts bare attributes like `<comp myFlag>`, give boolean inputs `@Input({ transform: booleanAttribute })` so consumers can write bare attributes under strict template checking (ng-matrix does not check this).
+> **Tip for library authors:** If your library accepts bare attributes like `<comp myFlag>`, give boolean inputs `@Input({ transform: booleanAttribute })` so consumers can write bare attributes under strict template checking (angular-compat-matrix does not check this).
 
 ---
 
@@ -346,9 +346,8 @@ Here are the most common real-world incompatibilities identified across popular 
 ```
 Usage
   npx angular-compat-matrix [options]
-  ng-matrix [options]                  (once installed)
-  ng-matrix cache                      (show cache location and size)
-  ng-matrix cache clean                (delete the cache)
+  npx angular-compat-matrix cache        (show cache location and size)
+  npx angular-compat-matrix cache clean  (delete the cache)
 
 Options
   --versions <list>      Angular majors to check: 22, 18-22, 20,22. Default: supported
@@ -383,7 +382,7 @@ Options
 - **Supported Workspaces:** Angular CLI workspaces and standalone `ng-packagr` libraries.
 - **Node.js:** Node 24.15 or later is recommended to cover all Angular majors from 17 through 22.
 - **Planned:**
-  - `ng-matrix ci github`: Generates dedicated GitHub Actions workflows with matrix parallelism.
+  - `npx angular-compat-matrix ci github`: Generates dedicated GitHub Actions workflows with matrix parallelism.
   - First-class Nx workspace discovery and integration.
   - Dedicated SSR (Server-Side Rendering) and `with-zone.js` validation columns.
 - **Out of Scope:** Yarn and Bun (npm and pnpm cover package testing; JSON output makes custom wrappers simple), app migration tooling, and runtime browser testing.

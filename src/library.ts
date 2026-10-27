@@ -125,7 +125,7 @@ export function detectBuild(options: LibraryOptions): BuildPlan {
 
   if (existsSync(join(cwd, 'nx.json'))) {
     throw new LibraryError(
-      'Nx workspaces are planned for v0.2. For now, run ng-matrix from the library folder (the one with ng-package.json) with --build "npx nx build <lib>".',
+      'Nx workspaces are planned for v0.2. For now, run angular-compat-matrix from the library folder (the one with ng-package.json) with --build "npx nx build <lib>".',
     );
   }
   throw new LibraryError(
@@ -135,7 +135,7 @@ export function detectBuild(options: LibraryOptions): BuildPlan {
 
 /**
  * Full compilation output must never be published: ng-packagr guards that with a `prepublishOnly`
- * script, which `npm pack` doesn't run. So ng-matrix checks for it itself.
+ * script, which `npm pack` doesn't run. So angular-compat-matrix checks for it itself.
  */
 export function fullCompilationEvidence(dir: string): string | undefined {
   const manifestPath = join(dir, 'package.json');

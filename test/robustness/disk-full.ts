@@ -22,7 +22,7 @@ function run(env: NodeJS.ProcessEnv): Promise<{ code: number | null; stdout: str
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [cli, '--package', 'ngx-toastr@20.0.5', '--versions', '22', '--format', 'json'], {
       cwd: root,
-      env: { ...process.env, NG_MATRIX_CACHE: cache, ...env },
+      env: { ...process.env, ANGULAR_COMPAT_MATRIX_CACHE: cache, ...env },
     });
     let stdout = '';
     let stderr = '';
