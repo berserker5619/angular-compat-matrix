@@ -83,8 +83,8 @@ export function githubWorkflow(options: WorkflowOptions): string {
       ? ''
       : `      - uses: pnpm/action-setup@v6\n${options.pnpm ? `        with:\n          version: ${options.pnpm}\n` : ''}`;
   const install = `${pnpm}      - name: Install dependencies\n        run: ${options.install}\n`;
-  // Per tool version and Angular major: each job downloads that major's CLI.
-  const cacheKey = `angular-compat-matrix-tools-\${{ runner.os }}-\${{ matrix.tool }}-\${{ matrix.name }}-`;
+  // One entry per tool version and Angular major (each job downloads that major's CLI), saved once and reused.
+  const cacheKey = `angular-compat-matrix-tools-\${{ runner.os }}-\${{ matrix.tool }}-\${{ matrix.name }}`;
   return `# Written by \`angular-compat-matrix ci github\`. Checks which Angular versions the library works
 # with: one job per Angular major, each on a Node that major supports, then one table in the
 # summary. The majors are worked out when the workflow runs, so a new Angular major needs no edit.
@@ -143,8 +143,7 @@ ${install}      - name: Cache the Angular CLIs and pnpm that angular-compat-matr
         uses: actions/cache@v6
         with:
           path: \${{ env.ANGULAR_COMPAT_MATRIX_CACHE }}/tools
-          key: ${cacheKey}\${{ github.run_id }}
-          restore-keys: ${cacheKey}
+          key: ${cacheKey}
       - name: Check Angular \${{ matrix.name }}
         run: ${options.command} \${{ matrix.args }}${withArgs} --format json > "$RUNNER_TEMP/angular-\${{ matrix.name }}.json"
       - uses: actions/upload-artifact@v7

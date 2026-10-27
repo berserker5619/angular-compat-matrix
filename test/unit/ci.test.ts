@@ -147,8 +147,8 @@ describe('ci: workflow', () => {
   });
 
   it('caches the tools per tool version and Angular major', () => {
-    assert.match(npm, /key: angular-compat-matrix-tools-\$\{\{ runner\.os \}\}-\$\{\{ matrix\.tool \}\}-\$\{\{ matrix\.name \}\}-\$\{\{ github\.run_id \}\}\n/);
-    assert.match(npm, /restore-keys: angular-compat-matrix-tools-\$\{\{ runner\.os \}\}-\$\{\{ matrix\.tool \}\}-\$\{\{ matrix\.name \}\}-\n/);
+    assert.match(npm, /key: angular-compat-matrix-tools-\$\{\{ runner\.os \}\}-\$\{\{ matrix\.tool \}\}-\$\{\{ matrix\.name \}\}\n/);
+    assert.doesNotMatch(npm, /run_id|restore-keys/);
   });
 
   it('keeps the summary exit code through tee', () => {
