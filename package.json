@@ -1,6 +1,6 @@
 {
   "name": "angular-compat-matrix",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Find out which Angular versions your published library really works with: it installs the packed package into a fresh app for each Angular major, builds it, and reports a matrix.",
   "keywords": [
     "angular",
