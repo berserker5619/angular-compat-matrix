@@ -51,9 +51,9 @@ describe('ci: plan', () => {
   it('gives each major its own --versions, and next comes with the newest stable major', () => {
     const plan = planMatrix([major(21, ['>=20.19.0']), major(22, ['>=22.12.0']), major(23, ['>=24.0.0'], true)], { version: '0.3.0', node: '>=22.12.0' });
     assert.deepEqual(plan, [
-      { name: '21', node: '22', args: '--versions 21', tool: '0.3.0' },
-      { name: '22', node: '22', args: '--versions 22', tool: '0.3.0' },
-      { name: 'next', node: '24', args: '--versions 22 --next', tool: '0.3.0' },
+      { name: '21', node: '22', args: '--versions 21', tool: '0.3.0', angular: '21.2.0' },
+      { name: '22', node: '22', args: '--versions 22', tool: '0.3.0', angular: '22.2.0' },
+      { name: 'next', node: '24', args: '--versions 22 --next', tool: '0.3.0', angular: '23.1.0-next.1' },
     ]);
   });
 });
@@ -146,8 +146,8 @@ describe('ci: workflow', () => {
     assert.match(npm, /strategy:\n {6}fail-fast: false\n/);
   });
 
-  it('caches the tools per tool version and Angular major', () => {
-    assert.match(npm, /key: angular-compat-matrix-tools-\$\{\{ runner\.os \}\}-\$\{\{ matrix\.tool \}\}-\$\{\{ matrix\.name \}\}\n/);
+  it('caches the tools per tool version and Angular version, so a new patch saves a new entry', () => {
+    assert.match(npm, /key: angular-compat-matrix-tools-\$\{\{ runner\.os \}\}-\$\{\{ matrix\.tool \}\}-\$\{\{ matrix\.name \}\}-\$\{\{ matrix\.angular \}\}\n/);
     assert.doesNotMatch(npm, /run_id|restore-keys/);
   });
 

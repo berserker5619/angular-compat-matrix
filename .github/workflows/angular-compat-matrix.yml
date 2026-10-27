@@ -60,7 +60,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ env.ANGULAR_COMPAT_MATRIX_CACHE }}/tools
-          key: angular-compat-matrix-tools-${{ runner.os }}-${{ matrix.tool }}-${{ matrix.name }}
+          key: angular-compat-matrix-tools-${{ runner.os }}-${{ matrix.tool }}-${{ matrix.name }}-${{ matrix.angular }}
       - name: Check Angular ${{ matrix.name }}
         run: node dist/cli.js ${{ matrix.args }} --cwd fixtures/libs/healthy --pm npm --format json > "$RUNNER_TEMP/angular-${{ matrix.name }}.json"
       - uses: actions/upload-artifact@v7

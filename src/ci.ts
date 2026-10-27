@@ -18,6 +18,8 @@ export interface MatrixEntry {
   args: string;
   /** The angular-compat-matrix version running, for the tool cache key. */
   tool: string;
+  /** The Angular version this job checks (latest patch, or `next`): a new patch saves a new cache entry. */
+  angular: string;
 }
 
 /**
@@ -49,6 +51,7 @@ export function planMatrix(angular: AngularMajor[], tool: { version: string; nod
     // `--next` always comes with a stable major; the summary drops the duplicate row.
     args: a.prerelease ? `--versions ${newestStable} --next` : `--versions ${a.major}`,
     tool: tool.version,
+    angular: a.version,
   }));
 }
 
@@ -83,8 +86,8 @@ export function githubWorkflow(options: WorkflowOptions): string {
       ? ''
       : `      - uses: pnpm/action-setup@v6\n${options.pnpm ? `        with:\n          version: ${options.pnpm}\n` : ''}`;
   const install = `${pnpm}      - name: Install dependencies\n        run: ${options.install}\n`;
-  // One entry per tool version and Angular major (each job downloads that major's CLI), saved once and reused.
-  const cacheKey = `angular-compat-matrix-tools-\${{ runner.os }}-\${{ matrix.tool }}-\${{ matrix.name }}`;
+  // One entry per tool version and Angular version (each job downloads that version's CLI), saved once and reused.
+  const cacheKey = `angular-compat-matrix-tools-\${{ runner.os }}-\${{ matrix.tool }}-\${{ matrix.name }}-\${{ matrix.angular }}`;
   return `# Written by \`angular-compat-matrix ci github\`. Checks which Angular versions the library works
 # with: one job per Angular major, each on a Node that major supports, then one table in the
 # summary. The majors are worked out when the workflow runs, so a new Angular major needs no edit.
