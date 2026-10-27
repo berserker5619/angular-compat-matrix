@@ -2,7 +2,7 @@
 
 Which Angular versions does your published library really work with?
 
-Run it with `npx angular-compat-matrix`. Once the package is installed, `angular-compat-matrix` works as a shorter alias for the same command.
+Run it with `npx angular-compat-matrix`, or install the package and run `angular-compat-matrix`.
 
 angular-compat-matrix builds and packs your Angular library, installs the tarball into a fresh app for each Angular major (created with that major's own CLI), builds it, and reports a compatibility matrix. It tests the exact package your users get, not your local source.
 
@@ -152,27 +152,30 @@ angular-compat-matrix returns standard POSIX exit codes suitable for CI pipeline
 
 ### GitHub Actions
 
-Add a step to your workflow to verify compatibility and post the matrix directly to your workflow run summary:
+Write a workflow for your repository, from its root:
+
+```sh
+npx angular-compat-matrix ci github
+```
+
+It writes `.github/workflows/angular-compat-matrix.yml` with three jobs:
+
+- **plan** works out the Angular majors when the workflow runs, the same way a local run does (supported majors, every major your peer range claims, and the newest). A new Angular major is picked up without editing the workflow.
+- **check** runs one job per major, in parallel, each on the newest Node that major's `engines` allow.
+- **summary** joins the results into one table in the run's summary.
+
+It runs on pushes to `main`, on pull requests, and weekly, so a new Angular release that breaks your library shows up before your users notice. A version your peer range claims that fails turns the run red.
+
+`ci github` takes the options that choose what to check (`--versions`, `--next`, `--project`, `--pm`, `--consumer`, `--build`, `--tests`, `--test-command`, `--allow-scripts`, `--step-timeout`, `--cwd`) and writes them into the workflow, plus:
+
+- `--install <cmd>`: how the jobs install your workspace. Default: `npm ci`, or pnpm when there's a `pnpm-lock.yaml`.
+- `--command <cmd>`: how the jobs run angular-compat-matrix. Default: `npx --yes angular-compat-matrix@<the version that wrote it>`, so upgrading is a matter of running `ci github --force` again.
+- `--force`: overwrite an existing workflow.
+
+For a single job instead, write the Markdown table to the summary yourself:
 
 ```yaml
-name: Compatibility Matrix
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-
-jobs:
-  compat:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - run: npm ci
-      - name: Run Angular Compatibility Matrix
-        run: npx angular-compat-matrix --format markdown >> "$GITHUB_STEP_SUMMARY"
+      - run: npx angular-compat-matrix --format markdown >> "$GITHUB_STEP_SUMMARY"
 ```
 
 ---
@@ -348,6 +351,7 @@ Usage
   npx angular-compat-matrix [options]
   npx angular-compat-matrix cache        (show cache location and size)
   npx angular-compat-matrix cache clean  (delete the cache)
+  npx angular-compat-matrix ci github    (write a GitHub Actions workflow that runs the matrix)
 
 Options
   --versions <list>      Angular majors to check: 22, 18-22, 20,22. Default: supported
@@ -382,7 +386,6 @@ Options
 - **Supported Workspaces:** Angular CLI workspaces and standalone `ng-packagr` libraries.
 - **Node.js:** Node 24.15 or later is recommended to cover all Angular majors from 17 through 22.
 - **Planned:**
-  - `npx angular-compat-matrix ci github`: Generates dedicated GitHub Actions workflows with matrix parallelism.
   - First-class Nx workspace discovery and integration.
   - Dedicated SSR (Server-Side Rendering) and `with-zone.js` validation columns.
 - **Out of Scope:** Yarn and Bun (npm and pnpm cover package testing; JSON output makes custom wrappers simple), app migration tooling, and runtime browser testing.
@@ -397,6 +400,9 @@ npm test                       # run all unit tests
 npm run build                  # compile TypeScript
 npm ci --prefix fixtures       # install Angular fixture toolchain
 node test/fixtures/run.ts      # run fixture integration tests
+
+# After changing src/ci.ts, regenerate this repo's own workflow (it checks the healthy fixture):
+node dist/cli.js ci github --force --cwd fixtures/libs/healthy --pm npm --command "node dist/cli.js" --install "npm ci && npm ci --prefix fixtures && npm run build"
 ```
 
 ---

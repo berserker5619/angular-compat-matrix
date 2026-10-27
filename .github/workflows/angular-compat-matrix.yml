@@ -1,0 +1,90 @@
+# Written by `angular-compat-matrix ci github`. Checks which Angular versions the library works
+# with: one job per Angular major, each on a Node that major supports, then one table in the
+# summary. The majors are worked out when the workflow runs, so a new Angular major needs no edit.
+name: Angular compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Weekly, to catch a new Angular release before users do.
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: angular-compat-matrix-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ANGULAR_COMPAT_MATRIX_CACHE: ${{ github.workspace }}/../angular-compat-matrix-cache
+
+jobs:
+  plan:
+    name: Angular versions
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+      - name: Install dependencies
+        run: npm ci && npm ci --prefix fixtures && npm run build
+      - id: plan
+        run: |
+          matrix=$(node dist/cli.js ci plan --cwd fixtures/libs/healthy --pm npm)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  check:
+    name: Angular ${{ matrix.name }}
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install dependencies
+        run: npm ci && npm ci --prefix fixtures && npm run build
+      - name: Cache the Angular CLIs and pnpm that angular-compat-matrix downloads
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.ANGULAR_COMPAT_MATRIX_CACHE }}/tools
+          key: angular-compat-matrix-tools-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: angular-compat-matrix-tools-${{ runner.os }}-
+      - name: Check Angular ${{ matrix.name }}
+        run: node dist/cli.js ${{ matrix.args }} --cwd fixtures/libs/healthy --pm npm --format json > "$RUNNER_TEMP/angular-${{ matrix.name }}.json"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: angular-compat-matrix-${{ matrix.name }}
+          path: ${{ runner.temp }}/angular-${{ matrix.name }}.json
+
+  summary:
+    name: Compatibility matrix
+    needs: [plan, check]
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+      - name: Install dependencies
+        run: npm ci && npm ci --prefix fixtures && npm run build
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: angular-compat-matrix-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/results
+      - run: node dist/cli.js ci summary "$RUNNER_TEMP"/results/*.json >> "$GITHUB_STEP_SUMMARY"

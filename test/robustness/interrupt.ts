@@ -21,7 +21,7 @@ function leftoverProcesses(): string[] {
         encoding: 'utf8',
       })
     : execFileSync('ps', ['-eo', 'pid,args'], { encoding: 'utf8' });
-  return out.split(/\r?\n/).filter((line) => /ng-matrix-[A-Za-z0-9]{6}[\\/]/.test(line));
+  return out.split(/\r?\n/).filter((line) => /angular-compat-matrix-[A-Za-z0-9]{6}[\\/]/.test(line));
 }
 
 async function interruptAt(step: string): Promise<{ code: number | null; log: string }> {

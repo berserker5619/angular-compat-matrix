@@ -7,9 +7,7 @@ import { environmentProblem, errorLines, npm } from './exec.ts';
 export const PNPM_VERSION = '12.15.0';
 
 export function defaultCacheDir(): string {
-  // NG_MATRIX_CACHE is the name from 0.2 and earlier.
-  const custom = process.env.ANGULAR_COMPAT_MATRIX_CACHE || process.env.NG_MATRIX_CACHE;
-  if (custom) return custom;
+  if (process.env.ANGULAR_COMPAT_MATRIX_CACHE) return process.env.ANGULAR_COMPAT_MATRIX_CACHE;
   if (process.platform === 'win32' && process.env.LOCALAPPDATA) return join(process.env.LOCALAPPDATA, 'angular-compat-matrix', 'Cache');
   return join(process.env.XDG_CACHE_HOME ?? join(homedir(), '.cache'), 'angular-compat-matrix');
 }

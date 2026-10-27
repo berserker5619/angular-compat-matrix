@@ -1,7 +1,6 @@
 node_modules/
 dist/
 *.tgz
-.ng-matrix/
 fixtures/**/dist/
 fixtures/build-*.log
 # Working notes kept next to the repo, not part of it
