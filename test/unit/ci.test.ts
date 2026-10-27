@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { githubWorkflow, mergeReports, nodeFor, planMatrix, shellQuote, WORKFLOW_PATH } from '../../src/ci.ts';
+import { annotations, githubWorkflow, mergeReports, nodeFor, planMatrix, shellQuote, WORKFLOW_PATH } from '../../src/ci.ts';
 import { type CheckName, type CheckResult, CHECKS, result, type Report, type VersionReport } from '../../src/model.ts';
 import type { AngularMajor } from '../../src/versions.ts';
 
@@ -47,11 +49,11 @@ describe('ci: Node for each job', () => {
 
 describe('ci: plan', () => {
   it('gives each major its own --versions, and next comes with the newest stable major', () => {
-    const plan = planMatrix([major(21, ['>=20.19.0']), major(22, ['>=22.12.0']), major(23, ['>=24.0.0'], true)], '>=22.12.0');
+    const plan = planMatrix([major(21, ['>=20.19.0']), major(22, ['>=22.12.0']), major(23, ['>=24.0.0'], true)], { version: '0.3.0', node: '>=22.12.0' });
     assert.deepEqual(plan, [
-      { name: '21', node: '22', args: '--versions 21' },
-      { name: '22', node: '22', args: '--versions 22' },
-      { name: 'next', node: '24', args: '--versions 22 --next' },
+      { name: '21', node: '22', args: '--versions 21', tool: '0.3.0' },
+      { name: '22', node: '22', args: '--versions 22', tool: '0.3.0' },
+      { name: 'next', node: '24', args: '--versions 22 --next', tool: '0.3.0' },
     ]);
   });
 });
@@ -73,10 +75,25 @@ describe('ci: summary', () => {
     assert.deepEqual(notes, []);
   });
 
-  it('exits 2 when a job left no report', () => {
-    const { report: merged, notes } = mergeReports([report([version(22, true)])], ['results/angular-21.json']);
-    assert.equal(merged.exitCode, 2);
+  it('exits 1 for a broken claimed version, 2 for a setup problem or missing report, else 0', () => {
+    const exit = (versions: VersionReport[], unreadable: string[] = []) => mergeReports(versions.map((v) => report([v])), unreadable).report.exitCode;
+    const unclaimedFail = version(23, false, result('fail', 'x'));
+    assert.equal(exit([version(22, true), version(21, false), unclaimedFail]), 0, 'works but not claimed, or fails outside the range: never red');
+    assert.equal(exit([version(21, true, result('fail', 'x')), version(22, true), unclaimedFail]), 1);
+    assert.equal(exit([{ ...version(21, true), setupError: 'ng new failed' }, version(22, true, result('fail', 'x'))]), 2);
+    assert.equal(exit([version(22, true)], ['angular-21.json']), 2);
+  });
+
+  it('notes which job left no report', () => {
+    const { notes } = mergeReports([report([version(22, true)])], ['results/angular-21.json']);
     assert.match(notes[0], /results\/angular-21\.json/);
+  });
+
+  it('refuses reports from another schema version or another package', () => {
+    assert.throws(() => mergeReports([report([version(21, true)]), { ...report([version(22, true)]), schemaVersion: 2 }], []), /schemaVersion 2/);
+    const other = report([version(22, true)]);
+    other.library = { ...other.library, version: '1.0.1' };
+    assert.throws(() => mergeReports([report([version(21, true)]), other], []), /different packages: my-lib@1\.0\.0 and my-lib@1\.0\.1/);
   });
 
   it('keeps the missing-peer finding, with one range from every version that passed', () => {
@@ -93,7 +110,24 @@ describe('ci: summary', () => {
   });
 });
 
+describe('ci: annotations', () => {
+  it('turns errors and warnings into GitHub annotations, and skips notes', () => {
+    const r = report([version(20, true), version(23, false)]);
+    r.findings = [
+      { level: 'error', majors: [20], text: 'AOT build: needs 50%\nmore' },
+      { level: 'warning', majors: [23], text: 'works, but not claimed' },
+      { level: 'note', majors: [19], text: 'expected' },
+    ];
+    assert.deepEqual(annotations(r), [
+      '::error title=angular-compat-matrix::my-lib@1.0.0, Angular 20: AOT build: needs 50%25%0Amore',
+      '::warning title=angular-compat-matrix::my-lib@1.0.0, Angular 23: works, but not claimed',
+    ]);
+  });
+});
+
 describe('ci: workflow', () => {
+  const npm = githubWorkflow({ command: 'npx --yes angular-compat-matrix@1.0.0', args: [], planArgs: [], install: 'npm ci', installForPlan: false });
+
   it('quotes only arguments that need it', () => {
     assert.equal(shellQuote('fixtures/libs/healthy'), 'fixtures/libs/healthy');
     assert.equal(shellQuote('npx nx build my-lib'), `'npx nx build my-lib'`);
@@ -107,6 +141,28 @@ describe('ci: workflow', () => {
     assert.equal(npx.match(/run: npm ci/g)?.length, 1);
   });
 
+  it('only reads the repo, and lets every major finish', () => {
+    assert.match(npm, /\npermissions:\n {2}contents: read\n/);
+    assert.match(npm, /strategy:\n {6}fail-fast: false\n/);
+  });
+
+  it('caches the tools per tool version and Angular major', () => {
+    assert.match(npm, /key: angular-compat-matrix-tools-\$\{\{ runner\.os \}\}-\$\{\{ matrix\.tool \}\}-\$\{\{ matrix\.name \}\}-\$\{\{ github\.run_id \}\}\n/);
+    assert.match(npm, /restore-keys: angular-compat-matrix-tools-\$\{\{ runner\.os \}\}-\$\{\{ matrix\.tool \}\}-\$\{\{ matrix\.name \}\}-\n/);
+  });
+
+  it('keeps the summary exit code through tee', () => {
+    assert.match(npm, /shell: bash\n {8}run: .* ci summary .*\| tee -a "\$GITHUB_STEP_SUMMARY"/);
+  });
+
+  it('sets up pnpm before installing in a pnpm workspace, and not otherwise', () => {
+    assert.doesNotMatch(npm, /pnpm\/action-setup|pnpm install/);
+    const pinned = githubWorkflow({ command: 'npx x', args: [], planArgs: [], install: 'pnpm install --frozen-lockfile', installForPlan: false, pnpm: '12.15.0' });
+    assert.match(pinned, /- uses: pnpm\/action-setup@v6\n {8}with:\n {10}version: 12\.15\.0\n {6}- name: Install dependencies\n {8}run: pnpm install --frozen-lockfile/);
+    const declared = githubWorkflow({ command: 'npx x', args: [], planArgs: [], install: 'pnpm install --frozen-lockfile', installForPlan: false, pnpm: '' });
+    assert.match(declared, /- uses: pnpm\/action-setup@v6\n {6}- name: Install dependencies/);
+  });
+
   it("matches this repo's own workflow, which runs it against the healthy fixture", () => {
     const expected = githubWorkflow({
       command: 'node dist/cli.js',
@@ -117,5 +173,40 @@ describe('ci: workflow', () => {
     });
     const committed = readFileSync(join(import.meta.dirname, '..', '..', WORKFLOW_PATH), 'utf8').replace(/\r\n/g, '\n');
     assert.equal(committed, expected, 'regenerate it with the command in the README’s Development section');
+  });
+});
+
+describe('ci github', () => {
+  const cli = join(import.meta.dirname, '..', '..', 'src', 'cli.ts');
+  /** A pnpm repository whose package.json names its pnpm. */
+  const repo = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'acm-ci-'));
+    writeFileSync(join(dir, 'ng-package.json'), '{}');
+    writeFileSync(join(dir, 'package.json'), '{ "name": "my-lib", "packageManager": "pnpm@10.0.0" }');
+    writeFileSync(join(dir, 'pnpm-lock.yaml'), '');
+    return dir;
+  };
+  const run = (dir: string, ...args: string[]) => spawnSync(process.execPath, [cli, 'ci', 'github', ...args], { cwd: dir, encoding: 'utf8' });
+
+  it('prints the workflow with --print and writes nothing', () => {
+    const dir = repo();
+    const out = execFileSync(process.execPath, [cli, 'ci', 'github', '--print'], { cwd: dir, encoding: 'utf8' });
+    assert.match(out, /^# Written by `angular-compat-matrix ci github`/);
+    assert.match(out, /- uses: pnpm\/action-setup@v6\n {6}- name: Install dependencies\n {8}run: pnpm install --frozen-lockfile/);
+    assert.ok(!existsSync(join(dir, WORKFLOW_PATH)));
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('refuses to overwrite a workflow without --force', () => {
+    const dir = repo();
+    assert.equal(run(dir).status, 0);
+    writeFileSync(join(dir, WORKFLOW_PATH), 'mine');
+    const refused = run(dir);
+    assert.equal(refused.status, 2);
+    assert.match(refused.stderr, /already exists\. Pass --force/);
+    assert.equal(readFileSync(join(dir, WORKFLOW_PATH), 'utf8'), 'mine');
+    assert.equal(run(dir, '--force').status, 0);
+    assert.notEqual(readFileSync(join(dir, WORKFLOW_PATH), 'utf8'), 'mine');
+    rmSync(dir, { recursive: true, force: true });
   });
 });

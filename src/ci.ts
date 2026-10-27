@@ -1,6 +1,6 @@
 import semver from 'semver';
-import type { Report, VersionReport } from './model.ts';
-import { exitCode, findings } from './report.ts';
+import { type Report, SCHEMA_VERSION, type VersionReport } from './model.ts';
+import { exitCode, findings, majorsText } from './report.ts';
 import type { AngularMajor } from './versions.ts';
 
 /*
@@ -16,6 +16,8 @@ export interface MatrixEntry {
   name: string;
   node: string;
   args: string;
+  /** The angular-compat-matrix version running, for the tool cache key. */
+  tool: string;
 }
 
 /**
@@ -39,13 +41,14 @@ export function nodeFor(ranges: string[]): string {
   return fits ? String(fits) : 'lts/*';
 }
 
-export function planMatrix(angular: AngularMajor[], toolNode: string): MatrixEntry[] {
+export function planMatrix(angular: AngularMajor[], tool: { version: string; node: string }): MatrixEntry[] {
   const newestStable = Math.max(...angular.filter((a) => !a.prerelease).map((a) => a.major));
   return angular.map((a) => ({
     name: a.prerelease ? 'next' : String(a.major),
-    node: nodeFor([...a.nodeRanges, toolNode]),
+    node: nodeFor([...a.nodeRanges, tool.node]),
     // `--next` always comes with a stable major; the summary drops the duplicate row.
     args: a.prerelease ? `--versions ${newestStable} --next` : `--versions ${a.major}`,
+    tool: tool.version,
   }));
 }
 
@@ -64,13 +67,24 @@ export interface WorkflowOptions {
   install: string;
   /** Whether `plan` needs the install too: only when the command comes from the workspace. */
   installForPlan: boolean;
+  /**
+   * For a pnpm workspace: the pnpm/action-setup step's `version`, or '' when package.json's
+   * `packageManager` names it (the action reads that itself). Undefined for npm.
+   */
+  pnpm?: string;
 }
 
 export function githubWorkflow(options: WorkflowOptions): string {
   const join = (list: string[]) => list.map((arg) => ` ${shellQuote(arg)}`).join('');
   const withArgs = join(options.args);
   const planArgs = join([...options.planArgs, ...options.args]);
-  const install = `      - name: Install dependencies\n        run: ${options.install}\n`;
+  const pnpm =
+    options.pnpm === undefined
+      ? ''
+      : `      - uses: pnpm/action-setup@v6\n${options.pnpm ? `        with:\n          version: ${options.pnpm}\n` : ''}`;
+  const install = `${pnpm}      - name: Install dependencies\n        run: ${options.install}\n`;
+  // Per tool version and Angular major: each job downloads that major's CLI.
+  const cacheKey = `angular-compat-matrix-tools-\${{ runner.os }}-\${{ matrix.tool }}-\${{ matrix.name }}-`;
   return `# Written by \`angular-compat-matrix ci github\`. Checks which Angular versions the library works
 # with: one job per Angular major, each on a Node that major supports, then one table in the
 # summary. The majors are worked out when the workflow runs, so a new Angular major needs no edit.
@@ -129,8 +143,8 @@ ${install}      - name: Cache the Angular CLIs and pnpm that angular-compat-matr
         uses: actions/cache@v6
         with:
           path: \${{ env.ANGULAR_COMPAT_MATRIX_CACHE }}/tools
-          key: angular-compat-matrix-tools-\${{ runner.os }}-\${{ github.run_id }}
-          restore-keys: angular-compat-matrix-tools-\${{ runner.os }}-
+          key: ${cacheKey}\${{ github.run_id }}
+          restore-keys: ${cacheKey}
       - name: Check Angular \${{ matrix.name }}
         run: ${options.command} \${{ matrix.args }}${withArgs} --format json > "$RUNNER_TEMP/angular-\${{ matrix.name }}.json"
       - uses: actions/upload-artifact@v7
@@ -153,7 +167,11 @@ ${options.installForPlan ? install : ''}      - uses: actions/download-artifact@
           pattern: angular-compat-matrix-*
           merge-multiple: true
           path: \${{ runner.temp }}/results
-      - run: ${options.command} ci summary "$RUNNER_TEMP"/results/*.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Join the results
+        # Explicit bash runs with pipefail, so the step fails when the summary does. The table
+        # goes to the run summary and to the log.
+        shell: bash
+        run: ${options.command} ci summary "$RUNNER_TEMP"/results/*.json | tee -a "$GITHUB_STEP_SUMMARY"
 `;
 }
 
@@ -163,6 +181,15 @@ ${options.installForPlan ? install : ''}      - uses: actions/download-artifact@
  */
 export function mergeReports(reports: Report[], unreadable: string[]): { report: Report; notes: string[] } {
   if (!reports.length) throw new Error(`No reports to join${unreadable.length ? `; unreadable: ${unreadable.join(', ')}` : ''}.`);
+  const { name, version } = reports[0].library;
+  for (const r of reports) {
+    if (r.schemaVersion !== SCHEMA_VERSION) {
+      throw new Error(`A report has schemaVersion ${r.schemaVersion}; this version of angular-compat-matrix reads ${SCHEMA_VERSION}.`);
+    }
+    if (r.library?.name !== name || r.library?.version !== version) {
+      throw new Error(`The reports are for different packages: ${name}@${version} and ${r.library?.name}@${r.library?.version}.`);
+    }
+  }
   const seen = new Set<string>();
   const versions: VersionReport[] = [];
   for (const version of reports.flatMap((r) => r.versions)) {
@@ -186,4 +213,15 @@ export function mergeReports(reports: Report[], unreadable: string[]): { report:
   };
   const notes = unreadable.map((file) => `No report in ${file}: that job stopped before writing one; see its log.`);
   return { report, notes };
+}
+
+/** GitHub annotations: an error for each broken promise, a warning for each warning finding. */
+export function annotations(report: Report): string[] {
+  const escape = (text: string) => text.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+  return report.findings
+    .filter((f) => f.level !== 'note')
+    .map((f) => {
+      const where = f.majors.length ? `Angular ${majorsText(f.majors)}: ` : '';
+      return `::${f.level} title=angular-compat-matrix::${escape(`${report.library.name}@${report.library.version}, ${where}${f.text}`)}`;
+    });
 }

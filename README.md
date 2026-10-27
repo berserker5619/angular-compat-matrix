@@ -162,15 +162,16 @@ It writes `.github/workflows/angular-compat-matrix.yml` with three jobs:
 
 - **plan** works out the Angular majors when the workflow runs, the same way a local run does (supported majors, every major your peer range claims, and the newest). A new Angular major is picked up without editing the workflow.
 - **check** runs one job per major, in parallel, each on the newest Node that major's `engines` allow.
-- **summary** joins the results into one table in the run's summary.
+- **summary** joins the results into one table in the run's summary (and its log). It refuses reports from another schema version or another package.
 
-It runs on pushes to `main`, on pull requests, and weekly, so a new Angular release that breaks your library shows up before your users notice. A version your peer range claims that fails turns the run red.
+It runs on pushes to `main`, on pull requests, and weekly, so a new Angular release that breaks your library shows up before your users notice. The summary job exits like a local run: 1 when a version your peer range claims fails, 2 when a version couldn't be checked or a job left no report, 0 otherwise. A version that works but isn't claimed, or fails outside the range, never turns the run red. Inside GitHub Actions, each run also adds an error annotation for every broken promise and a warning annotation for every warning.
 
 `ci github` takes the options that choose what to check (`--versions`, `--next`, `--project`, `--pm`, `--consumer`, `--build`, `--tests`, `--test-command`, `--allow-scripts`, `--step-timeout`, `--cwd`) and writes them into the workflow, plus:
 
-- `--install <cmd>`: how the jobs install your workspace. Default: `npm ci`, or pnpm when there's a `pnpm-lock.yaml`.
-- `--command <cmd>`: how the jobs run angular-compat-matrix. Default: `npx --yes angular-compat-matrix@<the version that wrote it>`, so upgrading is a matter of running `ci github --force` again.
-- `--force`: overwrite an existing workflow.
+- `--install <cmd>`: how the jobs install your workspace before building the library. Default: `npm ci`; with a `pnpm-lock.yaml`, `pnpm install --frozen-lockfile` after a `pnpm/action-setup` step (using `packageManager` from package.json when it names pnpm). Set it when the build needs more, such as building other packages first.
+- `--command <cmd>`: how the jobs run angular-compat-matrix. Default: `npx --yes angular-compat-matrix@<the version that wrote it>`, so upgrading is a matter of running `ci github --force` again. If angular-compat-matrix is a devDependency, `--command "npx angular-compat-matrix"` uses the version in your lockfile instead (every job then installs first).
+- `--force`: overwrite an existing workflow (without it, `ci github` refuses).
+- `--print`: print the workflow instead of writing it.
 
 For a single job instead, write the Markdown table to the summary yourself:
 

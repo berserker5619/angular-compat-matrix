@@ -60,8 +60,8 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ env.ANGULAR_COMPAT_MATRIX_CACHE }}/tools
-          key: angular-compat-matrix-tools-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: angular-compat-matrix-tools-${{ runner.os }}-
+          key: angular-compat-matrix-tools-${{ runner.os }}-${{ matrix.tool }}-${{ matrix.name }}-${{ github.run_id }}
+          restore-keys: angular-compat-matrix-tools-${{ runner.os }}-${{ matrix.tool }}-${{ matrix.name }}-
       - name: Check Angular ${{ matrix.name }}
         run: node dist/cli.js ${{ matrix.args }} --cwd fixtures/libs/healthy --pm npm --format json > "$RUNNER_TEMP/angular-${{ matrix.name }}.json"
       - uses: actions/upload-artifact@v7
@@ -87,4 +87,8 @@ jobs:
           pattern: angular-compat-matrix-*
           merge-multiple: true
           path: ${{ runner.temp }}/results
-      - run: node dist/cli.js ci summary "$RUNNER_TEMP"/results/*.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Join the results
+        # Explicit bash runs with pipefail, so the step fails when the summary does. The table
+        # goes to the run summary and to the log.
+        shell: bash
+        run: node dist/cli.js ci summary "$RUNNER_TEMP"/results/*.json | tee -a "$GITHUB_STEP_SUMMARY"

@@ -15,8 +15,8 @@ import { defaultConcurrency, runAll } from './run.ts';
 import { setStepTimeout, setVerbose } from './exec.ts';
 import { Progress } from './progress.ts';
 import { ALLOW_SCRIPTS_WARNING } from './scripts.ts';
-import { cacheStats, cleanCache, defaultCacheDir, formatBytes } from './tools.ts';
-import { githubWorkflow, mergeReports, planMatrix, WORKFLOW_PATH } from './ci.ts';
+import { cacheStats, cleanCache, defaultCacheDir, formatBytes, PNPM_VERSION } from './tools.ts';
+import { annotations, githubWorkflow, mergeReports, planMatrix, WORKFLOW_PATH } from './ci.ts';
 import {
   type AngularMajor,
   defaultMajors,
@@ -72,6 +72,7 @@ check (--versions, --project, --pm, --cwd...), and:
   --install <cmd>        How the jobs install the workspace (default: from the lockfile)
   --command <cmd>        How the jobs run angular-compat-matrix (default: npx, this version)
   --force                Overwrite an existing workflow
+  --print                Print the workflow instead of writing it
 
 Exit code: 1 when a version inside the peer range fails, 2 when a version couldn't be
 checked at all, 0 otherwise. A version outside the range that fails is a note, not an error.
@@ -139,6 +140,7 @@ function parse(argv: string[]) {
       install: { type: 'string' },
       command: { type: 'string' },
       force: { type: 'boolean', default: false },
+      print: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
       version: { type: 'boolean', short: 'v', default: false },
     },
@@ -288,6 +290,8 @@ export async function main(argv: string[]): Promise<number> {
     };
     const render = format === 'json' ? (r: Report) => renderJson(r, values.verbose) : format === 'markdown' ? renderMarkdown : (r: Report) => renderTerminal(r, values.verbose);
     process.stdout.write((format === 'terminal' ? '\n' : '') + render(report));
+    // On stderr, so they don't end up in a JSON or Markdown file; the runner reads both streams.
+    if (process.env.GITHUB_ACTIONS === 'true') for (const line of annotations(report)) process.stderr.write(`${line}\n`);
     return report.exitCode;
   } catch (error) {
     return explain(error);
@@ -306,7 +310,7 @@ async function ci(sub: string | undefined, files: string[], values: Values): Pro
     if (sub === 'github') {
       detectBuild({ cwd, project: values.project, build: values.build });
       const target = resolve(WORKFLOW_PATH);
-      if (existsSync(target) && !values.force) fail(`${WORKFLOW_PATH} already exists. Pass --force to overwrite it.`);
+      if (!values.print && existsSync(target) && !values.force) fail(`${WORKFLOW_PATH} already exists. Pass --force to overwrite it, or --print to see it.`);
       const pass = (name: string, value: string | boolean | undefined) =>
         value === undefined || value === false ? [] : value === true ? [`--${name}`] : [`--${name}`, value];
       const args = [
@@ -321,17 +325,21 @@ async function ci(sub: string | undefined, files: string[], values: Values): Pro
         ...pass('allow-scripts', values['allow-scripts']),
         ...pass('step-timeout', values['step-timeout']),
       ];
+      const pnpm = pnpmSetup(process.cwd());
+      const workflow = githubWorkflow({
+        command: values.command ?? `npx --yes angular-compat-matrix@${toolVersion()}`,
+        args,
+        planArgs: [...pass('versions', values.versions), ...pass('next', values.next)],
+        install: values.install ?? (pnpm !== undefined ? 'pnpm install --frozen-lockfile' : existsSync('package-lock.json') ? 'npm ci' : 'npm install'),
+        installForPlan: Boolean(values.command),
+        pnpm,
+      });
+      if (values.print) {
+        process.stdout.write(workflow);
+        return 0;
+      }
       mkdirSync(dirname(target), { recursive: true });
-      writeFileSync(
-        target,
-        githubWorkflow({
-          command: values.command ?? `npx --yes angular-compat-matrix@${toolVersion()}`,
-          args,
-          planArgs: [...pass('versions', values.versions), ...pass('next', values.next)],
-          install: values.install ?? installCommand(process.cwd()),
-          installForPlan: Boolean(values.command),
-        }),
-      );
+      writeFileSync(target, workflow);
       process.stdout.write(`Wrote ${WORKFLOW_PATH}. Commit it; it runs on pushes to main, pull requests and weekly.\n`);
       return 0;
     }
@@ -347,7 +355,7 @@ async function ci(sub: string | undefined, files: string[], values: Values): Pro
       const angular = majors.map((major) => describeMajor(sources, major, now));
       const next = values.next ? nextVersion(sources.core) : undefined;
       if (next) angular.push(describeMajor(sources, semver.major(next), now, next));
-      process.stdout.write(`${JSON.stringify(planMatrix(angular, toolManifest().engines.node))}\n`);
+      process.stdout.write(`${JSON.stringify(planMatrix(angular, { version: toolVersion(), node: toolManifest().engines.node }))}\n`);
       return 0;
     }
     if (sub === 'summary') {
@@ -357,14 +365,20 @@ async function ci(sub: string | undefined, files: string[], values: Values): Pro
       for (const file of files) {
         try {
           const report = JSON.parse(readFileSync(file, 'utf8')) as Report;
-          if (report.schemaVersion !== SCHEMA_VERSION || !Array.isArray(report.versions)) throw new Error('not a report');
+          if (!Array.isArray(report.versions)) throw new Error('not a report');
           reports.push(report);
         } catch {
           unreadable.push(file);
         }
       }
       if (!reports.length) fail(`None of these is a report: ${unreadable.join(', ')}.`);
-      const { report, notes } = mergeReports(reports, unreadable);
+      let merged: ReturnType<typeof mergeReports>;
+      try {
+        merged = mergeReports(reports, unreadable);
+      } catch (error) {
+        fail((error as Error).message);
+      }
+      const { report, notes } = merged;
       process.stdout.write(renderMarkdown(report) + notes.map((note) => `- ⚠️ ${note}\n`).join(''));
       return report.exitCode;
     }
@@ -374,14 +388,15 @@ async function ci(sub: string | undefined, files: string[], values: Values): Pro
   }
 }
 
-/** The workspace's install command, from its lockfile. */
-function installCommand(root: string): string {
-  if (existsSync(join(root, 'pnpm-lock.yaml'))) {
-    const declared = (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { packageManager?: string }).packageManager;
-    const pnpm = declared?.startsWith('pnpm@') ? declared.split('+')[0] : 'pnpm';
-    return `npx --yes ${pnpm} install --frozen-lockfile`;
-  }
-  return existsSync(join(root, 'package-lock.json')) ? 'npm ci' : 'npm install';
+/**
+ * For a pnpm workspace, the pnpm/action-setup `version`: '' when package.json's `packageManager`
+ * names pnpm (the action reads it, and refuses a second version), else the pnpm this tool pins.
+ */
+function pnpmSetup(root: string): string | undefined {
+  if (!existsSync(join(root, 'pnpm-lock.yaml'))) return undefined;
+  const manifest = join(root, 'package.json');
+  const declared = existsSync(manifest) ? (JSON.parse(readFileSync(manifest, 'utf8')) as { packageManager?: string }).packageManager : undefined;
+  return declared?.startsWith('pnpm@') ? '' : PNPM_VERSION;
 }
 
 main(process.argv.slice(2)).then(
